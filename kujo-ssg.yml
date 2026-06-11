@@ -1,0 +1,25 @@
+site_url: https://demo.kujo.local
+site_title: Kujo SSG Starter Site
+site_tagline: A complete starter that showcases pages, posts, custom types, and taxonomies.
+
+output: output
+content: content
+templates: templates
+assets: assets
+
+blog_slug: blog
+posts_per_page: 2
+sort_by: date
+
+fonts:
+  - Bree Serif
+  - Inter
+
+robots: public
+llms: public
+
+watch: false
+minify: true
+download_remote_images: true
+no_index: false
+no_aux: false

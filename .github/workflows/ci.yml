@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout kujo-ssg
+        uses: actions/checkout@v4
+
+      - name: Checkout Kujo runtime
+        uses: actions/checkout@v4
+        with:
+          repository: kujolang/kujo
+          path: kujo-runtime
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run repo CI checks
+        env:
+          KUJO_RUNTIME_DIR: ${{ github.workspace }}/kujo-runtime
+        run: bash scripts/run_ci_checks.sh
