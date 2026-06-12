@@ -4,6 +4,10 @@ Local static-site generation showcase for Kujo projects, built around a single e
 
 `SSG` is designed for teams that want deterministic builds, straightforward template overrides, and a transparent content pipeline. Content, templates, assets, metadata, feeds, and validation stay visible in the repository instead of disappearing behind framework abstractions.
 
+Prioritize copyable examples over tests: examples should model the most token-efficient idioms we want agents to imitate.
+
+Exclude generated/bulk paths from the main sweep unless the task explicitly targets them; document the search exclusions you used.
+
 It fits the Clarity / Context / Control story by keeping content models, routes, feeds, and validation predictable, surfacing generated artifacts and metadata as context, and making builds and release checks local and reviewable.
 
 ## Highlights
@@ -49,6 +53,13 @@ Build the bundled starter site from the project root:
 
 ```bash
 kujo run ./build.kujo -- --site-url https://example.com
+```
+
+Expected final lines include:
+
+```text
+Build complete
+  Output directory: output
 ```
 
 Preview the generated site locally on `127.0.0.1`:
@@ -107,7 +118,7 @@ Core directories in a standard project:
 - `content/`: Markdown source content and taxonomy lookup files
 - `templates/`: page, listing, and item template overrides
 - `assets/`: static assets copied or processed into output
-- `output/`: generated site artifacts
+- `output/`: generated site artifacts; do not edit by hand
 - `scripts/`: validation and release automation
 
 ## Configuration
@@ -335,6 +346,7 @@ Primary outputs include:
 ## Engineering Workflow
 
 - Main pipeline entrypoint: [build.kujo](build.kujo)
+- Agent/contributor guide: [AGENTS.md](AGENTS.md)
 - Main contract tests: `scripts/test-cli-contract.sh`, `scripts/test-generated-contract.sh`
 - Primary validation path: `bash scripts/run_ci_checks.sh`
 - Release gate: `bash scripts/run_release_gate.sh`
