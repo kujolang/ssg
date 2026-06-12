@@ -28,7 +28,7 @@ main() {
 
 	setup_temp_site "$REPO_ROOT" "$temp_dir"
 	pushd "$temp_dir" >/dev/null
-	rm content
+	rm -rf content
 	cp -R "$REPO_ROOT/content" content
 
 	cat > content/pages/metadata-proof.md <<'EOF'

@@ -61,7 +61,7 @@ setup_temp_site() {
 	local repo_root="$1"
 	local site_dir="$2"
 	cp "$repo_root/kujo-ssg.yml" "$site_dir/kujo-ssg.yml"
-	ln -s "$repo_root/assets" "$site_dir/assets"
-	ln -s "$repo_root/content" "$site_dir/content"
-	ln -s "$repo_root/templates" "$site_dir/templates"
+	cp -R "$repo_root/assets" "$site_dir/assets"
+	cp -R "$repo_root/content" "$site_dir/content"
+	cp -R "$repo_root/templates" "$site_dir/templates"
 }
