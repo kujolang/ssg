@@ -3,38 +3,54 @@
 
 VERSION := "1.1.0"
 
-print("╔════════════════════════════════════════════════╗")
-print("║        Kujo Static Site Generator              ║")
-print("╚════════════════════════════════════════════════╝")
-print("")
+func print_lines(lines) {
+	i := 0
+	loop {
+		if i >= len(lines) {
+			break
+		}
+
+		print(lines[i])
+		i := i + 1
+	}
+}
+
+print_lines([
+	"╔════════════════════════════════════════════════╗",
+	"║        Kujo Static Site Generator              ║",
+	"╚════════════════════════════════════════════════╝",
+	""
+])
 
 func print_help() {
-	print("Usage: kujo run ./build.kujo [options]")
-	print("")
-	print("Site build options:")
-	print("  --output <dir>                Output directory (default: output)")
-	print("  --content <dir>               Content directory (default: content)")
-	print("  --templates <dir>             Templates directory (default: templates)")
-	print("  --assets <dir>                Assets directory (default: assets)")
-	print("  --posts-per-page <n>          Pagination size (default: 5)")
-	print("  --sort-by <date|title|author|order>")
-	print("  --fonts <comma,list>          Google fonts list")
-	print("  --site-title <text>")
-	print("  --site-tagline <text>")
-	print("  --site-url <url>")
-	print("  --robots <public|private>")
-	print("  --llms <public|private>")
-	print("  --watch                       Reserved (not implemented)")
-	print("  --minify                      Generate minified CSS/JS")
-	print("  --download-remote-images      Download remote featured images")
-	print("  --blog-slug <slug>            Blog root slug (default: blog)")
-	print("  --init <yml|yaml|json>        Bootstrap starter project")
-	print("  --version                     Print version and exit")
-	print("  --help                        Show this help and exit")
-	print("")
-	print("Benchmark compatibility options:")
-	print("  --no-index                    Skip index/blog listing pages")
-	print("  --no-aux                      Skip feed/sitemap/robots/llms generation")
+	print_lines([
+		"Usage: kujo run ./build.kujo [options]",
+		"",
+		"Site build options:",
+		"  --output <dir>                Output directory (default: output)",
+		"  --content <dir>               Content directory (default: content)",
+		"  --templates <dir>             Templates directory (default: templates)",
+		"  --assets <dir>                Assets directory (default: assets)",
+		"  --posts-per-page <n>          Pagination size (default: 5)",
+		"  --sort-by <date|title|author|order>",
+		"  --fonts <comma,list>          Google fonts list",
+		"  --site-title <text>",
+		"  --site-tagline <text>",
+		"  --site-url <url>",
+		"  --robots <public|private>",
+		"  --llms <public|private>",
+		"  --watch                       Reserved (not implemented)",
+		"  --minify                      Generate minified CSS/JS",
+		"  --download-remote-images      Download remote featured images",
+		"  --blog-slug <slug>            Blog root slug (default: blog)",
+		"  --init <yml|yaml|json>        Bootstrap starter project",
+		"  --version                     Print version and exit",
+		"  --help                        Show this help and exit",
+		"",
+		"Benchmark compatibility options:",
+		"  --no-index                    Skip index/blog listing pages",
+		"  --no-aux                      Skip feed/sitemap/robots/llms generation"
+	])
 }
 
 func default_settings() {
@@ -234,6 +250,18 @@ func ensure_dir(path) {
 		if !path_exists(current) {
 			create_dir(current)
 		}
+	}
+}
+
+func ensure_dirs(paths) {
+	i := 0
+	loop {
+		if i >= len(paths) {
+			break
+		}
+
+		ensure_dir(paths[i])
+		i := i + 1
 	}
 }
 
@@ -1947,17 +1975,19 @@ func create_sample_config(format_name) {
 }
 
 func init_project(format_name) {
-	ensure_dir("templates")
-	ensure_dir("content/posts")
-	ensure_dir("content/pages")
-	ensure_dir("content/storefronts")
-	ensure_dir("content/tshirts")
-	ensure_dir("content/pants")
-	ensure_dir("content/shorts")
-	ensure_dir("assets/css")
-	ensure_dir("assets/fonts")
-	ensure_dir("assets/js")
-	ensure_dir("assets/images")
+	ensure_dirs([
+		"templates",
+		"content/posts",
+		"content/pages",
+		"content/storefronts",
+		"content/tshirts",
+		"content/pants",
+		"content/shorts",
+		"assets/css",
+		"assets/fonts",
+		"assets/js",
+		"assets/images"
+	])
 
 	write_if_missing("templates/layout.html", "<!DOCTYPE html>\n<html lang=\"{{lang}}\">\n<head>\n\t<meta charset=\"UTF-8\">\n\t<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\t<title>{{page_title}}</title>\n\t<meta name=\"description\" content=\"{{meta_description}}\">\n\t<meta name=\"keywords\" content=\"{{seo_keywords}}\">\n\t<meta name=\"author\" content=\"{{author_meta}}\">\n\t{{canonical_tag}}\n\t<meta property=\"og:title\" content=\"{{seo_title}}\">\n\t<meta property=\"og:description\" content=\"{{seo_description}}\">\n\t<meta property=\"og:url\" content=\"{{og_url}}\">\n\t<meta property=\"og:type\" content=\"website\">\n\t{{og_image_tag}}\n\t<meta name=\"twitter:card\" content=\"summary_large_image\">\n\t<meta name=\"twitter:title\" content=\"{{seo_title}}\">\n\t<meta name=\"twitter:description\" content=\"{{seo_description}}\">\n\t{{twitter_image_tag}}\n\t<link rel=\"stylesheet\" href=\"{{relative_path}}assets/css/fonts.css\">\n\t<link rel=\"stylesheet\" href=\"{{stylesheet_path}}\">\n</head>\n<body>\n\t<header class=\"site-header\">\n\t\t<h1><a href=\"{{home_path}}\">{{site_name}}</a></h1>\n\t\t<nav>{{navigation}}</nav>\n\t</header>\n\t<main>{{content}}</main>\n\t<footer><p>{{site_tagline}}</p></footer>\n</body>\n</html>\n")
 	write_if_missing("templates/page-home.html", "<main class=\"hero-shell\">\n\t<section class=\"hero\">\n\t\t<p class=\"eyebrow\">Starter Site</p>\n\t\t<h1>{{title}}</h1>\n\t\t<p>{{description}}</p>\n\t</section>\n\t<section class=\"section-shell\">\n\t\t<h2>Latest Posts</h2>\n\t\t{{posts_html}}\n\t\t{{pagination}}\n\t</section>\n</main>\n")
@@ -3196,11 +3226,13 @@ func build_site(settings) {
 	}
 
 	total_time := (performance_now() - build_start) / 1000.0
-	print("Build complete")
-	print("  Posts generated: " + to_string(total_posts))
-	print("  Pages generated: " + to_string(len(built_pages)))
-	print("  Output directory: " + output_dir)
-	print("  Build time: " + to_string(total_time) + "s")
+	print_lines([
+		"Build complete",
+		"  Posts generated: " + to_string(total_posts),
+		"  Pages generated: " + to_string(len(built_pages)),
+		"  Output directory: " + output_dir,
+		"  Build time: " + to_string(total_time) + "s"
+	])
 }
 
 cli_args := args()
