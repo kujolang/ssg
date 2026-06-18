@@ -1467,6 +1467,12 @@ func featured_image_html_tag(featured_image_url, title) {
 }
 
 func render_layout(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta) {
+	# Delegates to the native renderer (compiled once, byte-identical to the
+	# previous interpreted body, which is preserved as render_layout_interpreted).
+	return render_layout_native(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta)
+}
+
+func render_layout_interpreted(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta) {
 	prefix := route_prefix(route)
 	style_file := "assets/css/style.css"
 	if settings["minify"] {
