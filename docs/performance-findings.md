@@ -1,7 +1,7 @@
 # Kujo SSG — Large-Site Performance Findings
 
 **Date:** 2026-06-18
-**Context:** Goal was to beat the reference SSG's (Stattic 1.0.0) build speed.
+**Context:** Goal was to beat the reference SSG's build speed.
 
 ## Fair head-to-head (the number that matters)
 
