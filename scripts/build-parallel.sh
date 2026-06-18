@@ -38,6 +38,7 @@ start=$(date +%s.%N)
 
 echo "[1/3] setup"
 "$KUJO" run "$BUILD" -- --phase setup "$@"
+t_setup=$(date +%s.%N)
 
 echo "[2/3] rendering posts: $SHARDS shards, $CONCURRENCY at a time"
 fail_flag="$(mktemp)"
@@ -66,9 +67,16 @@ if [ -s "$fail_flag" ]; then
     exit 1
 fi
 rm -f "$fail_flag"
+t_render=$(date +%s.%N)
 
 echo "[3/3] finalize"
 "$KUJO" run "$BUILD" -- --phase finalize --shards "$SHARDS" "$@"
+t_finalize=$(date +%s.%N)
+
+printf "  phases: setup=%.1fs  render=%.1fs  finalize=%.1fs\n" \
+    "$(echo "$t_setup - $start" | bc)" \
+    "$(echo "$t_render - $t_setup" | bc)" \
+    "$(echo "$t_finalize - $t_render" | bc)"
 
 end=$(date +%s.%N)
 printf "Parallel build complete in %.1fs (%s shards, %s concurrency)\n" \
