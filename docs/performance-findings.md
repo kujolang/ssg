@@ -43,6 +43,31 @@ below.
   serial and now dominate. Even with a perfect render phase, that serial tail keeps
   Kujo well above the reference SSG's 16.7 s.
 
+## Where the parallel 10k time goes (measured, 4,000-post proxy)
+
+Per-phase timing from `scripts/build-parallel.sh` (16 shards / 12 cores, 4,000 posts):
+
+| Phase | Time | Parallel? | Notes |
+|---|---|---|---|
+| setup | 5 s | no | assets, fonts, pages/collections, manifest |
+| render posts | 50 s | **yes** (shards) | scales with cores |
+| finalize | 42 s | **no (serial)** | listings 28 s + aux (sitemap/rss/llms) 10 s |
+
+Two findings drive the rest of the gap:
+
+1. **The serial finalize is ~50% of the build**, and its listing generation
+   (≈28 s) dominates. Listings call `render_layout` twice per page-pair (index +
+   blog) — ~800 `render_layout` calls at 10k. **Parallelizing finalize listings**
+   (a sharded `finalize-listings` phase, same pattern as posts) is the biggest
+   remaining *no-rebuild* lever and would roughly halve the 10k time.
+2. **`render_layout` is the per-page floor (~45 ms interpreted).** It builds the
+   ~28-key template context, JSON-LD, and OG/Twitter tags in the VM. Escapes and
+   markdown are already native (`escape_xml`, `render_markdown`); the remaining
+   cost is the orchestration itself. Native-izing `render_layout` is what would
+   actually close the gap to a C-backed SSG — but it is a large, higher-risk port
+   and each runtime rebuild is ~15 min (`codegen-units=1` + LTO), so it should be
+   scoped deliberately rather than ground out incrementally.
+
 ## What the optimizations DID achieve (kept; all validated)
 
 | Stage | Effect |
