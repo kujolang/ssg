@@ -10,6 +10,7 @@
 | Kujo SSG — single process (after all optimizations) | ~590 s | ~59 ms |
 | Kujo SSG — parallel, 40 shards / 12 cores (before fix) | 667 s | — |
 | Kujo SSG — parallel, 40 shards / 12 cores (after fix) | ~527 s* | — |
+| Kujo SSG — parallel + native render_layout | ~350 s* | — |
 
 \* Measured on a heavily-loaded machine; treat as a noisy upper bound. The clean,
 single-sitting signal is the **2,000-page** result below.
@@ -50,6 +51,7 @@ below.
 | Streaming accumulation + native sort | algorithm now `O(n)`; 10k completes |
 | Taxonomy hot-path skip | 500-page 165 s → 71 s |
 | **Native `render_markdown` + `escape_xml` builtins** | single-process per-page 142 ms → **59 ms (2.4×)** |
+| **Native `render_layout` builtin** (SEO/OG/JSON-LD/template fill) | per-page **~72 ms → ~45 ms**; 10k parallel 527 s → ~350 s |
 | Windowed pagination | removes `O(pages^2)` in finalize |
 | Parallel build (`scripts/build-parallel.sh`) | byte-identical output; helps small/medium sites |
 
