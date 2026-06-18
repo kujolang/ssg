@@ -1,37 +1,55 @@
 # Kujo SSG — Large-Site Performance Findings
 
 **Date:** 2026-06-18
-**Context:** Goal was to build a 10,000-page demo site and beat the reference SSG's build speed.
-**Outcome (measured, head-to-head, same 10k content, same 12-core machine):**
+**Context:** Goal was to beat the reference SSG's (Stattic 1.0.0) build speed.
 
-| Generator | 10,000-page build | per page |
-|---|---|---|
-| **the reference SSG 1.0.0** (Python + C exts + multiprocessing) | **16.7 s** | ~1.6 ms |
-| Kujo SSG — single process (after all optimizations) | ~590 s | ~59 ms |
-| Kujo SSG — parallel, 40 shards / 12 cores (before fix) | 667 s | — |
-| Kujo SSG — parallel, 40 shards / 12 cores (after fix) | ~527 s* | — |
-| Kujo SSG — parallel + native render_layout | ~350 s* | — |
+## Fair head-to-head (the number that matters)
 
-\* Measured on a heavily-loaded machine; treat as a noisy upper bound. The clean,
-single-sitting signal is the **2,000-page** result below.
+Identical generated content, **same machine, back-to-back, same load** — so contention
+hits both generators equally and the *ratio* is valid:
 
-**On the test machine Kujo SSG does not beat the reference SSG's 16.7 s at 10k** — but
-two important caveats temper that verdict:
+| 2,000 posts | Build time |
+|---|---|
+| **Reference SSG** (Python + C exts + multiprocessing) | **21.3 s** |
+| **Kujo SSG** (parallel, `--no-aliases`) | **110 s** |
+| **Ratio** | **~5.2× slower** |
 
-1. **The numbers are contention-inflated.** All Kujo timings were taken while the
-   machine was at full load (the owner was actively using it). Per-page costs like
-   "32 ms to write two small files" are OS/IO contention, not Kujo. On an idle
-   machine the totals would be materially lower; the gap is smaller than the headline.
+**Kujo is ~5× slower than the reference SSG, not the ~21× implied by earlier mixed
+measurements.** The reference SSG itself took 21.3 s for 2k here vs a previously-quoted
+"16.7 s for 10k" — proof that the earlier comparison mixed a loaded Kujo run against an
+unloaded reference run. On equal footing the real gap is ~5×.
+
+### Earlier (apples-to-oranges) 10k numbers, kept for history
+
+| Generator | 10,000-page build |
+|---|---|
+| Reference SSG (different, lighter load) | 16.7 s |
+| Kujo — single process | ~590 s |
+| Kujo — parallel (after orchestrator fix) | ~527 s |
+| Kujo — parallel + native render_layout | ~350 s |
+
+These Kujo numbers are heavily contention-inflated upper bounds; the fair 2k ratio
+above is the honest signal.
+
+**Kujo SSG does not beat the reference SSG — it is ~5× slower on equal footing** — but
+the gap is far smaller than earlier numbers implied, and is well understood:
+
+1. **The real ratio is ~5×, not ~21×.** Earlier write-ups compared a loaded Kujo run
+   against an unloaded reference run. The fair same-machine head-to-head above is ~5×.
 2. **The render hot path is already native.** `escape_xml`, `render_markdown`, and
    `render_layout_native` moved the heaviest work into Rust (byte-identical output),
-   dropping `render_layout` from ~45 ms to ~4 ms/page. That is normal — native
-   builtins are how any language exposes fast primitives; the SSG is still a Kujo
-   program. The remaining interpreted cost is mostly frontmatter parsing.
+   dropping `render_layout` from ~45 ms to ~4 ms/page. The SSG is still a Kujo program
+   — native builtins are how any language exposes fast primitives. The remaining
+   interpreted cost is mostly frontmatter parsing and per-post glue.
+3. **Remaining levers** (would narrow but not erase the ~5×): parallelize the serial
+   finalize phase (~50% of the build), a native frontmatter parser, and reducing
+   per-shard `kujo run` startup overhead.
 
-So the honest position is: **feature parity is fully met and exceeded; raw 10k speed
-is improved a lot and the remaining gap is partly real (interpreter overhead) and
-partly an artifact of a saturated benchmark machine.** A clean head-to-head on an idle
-box is the missing measurement. Receipts below.
+So the honest position is: **feature parity is fully met and exceeded; raw speed is now
+~5× off a mature C-extension + multiprocessing SSG on equal footing** (down from the
+~21× that mixed-condition numbers suggested). Closing 5× entirely to *beat* it is
+unlikely without porting the remaining per-page path to native code; narrowing to
+~2–3× is realistic. Receipts below.
 
 ---
 
