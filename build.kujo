@@ -72,7 +72,10 @@ func default_settings() {
 		"download_remote_images": false,
 		"blog_slug": "blog",
 		"no_index": false,
-		"no_aux": false
+		"no_aux": false,
+		"phase": "full",
+		"shard": 0,
+		"shards": 1
 	}
 }
 
@@ -494,73 +497,31 @@ func normalize_taxonomies_map(value) {
 
 func inline_markdown(text) {
 	out := text
-	out := regex_replace(out, "!\\[([^\\]]*)\\]\\(([^\\)]+)\\)", "<img src=\"$2\" alt=\"$1\">")
-	out := regex_replace(out, "\\[([^\\]]+)\\]\\(([^\\)]+)\\)", "<a href=\"$2\">$1</a>")
-	out := regex_replace(out, "\\*\\*([^\\*]+)\\*\\*", "<strong>$1</strong>")
-	out := regex_replace(out, "\\*([^\\*]+)\\*", "<em>$1</em>")
-	out := regex_replace(out, "`([^`]+)`", "<code>$1</code>")
+	# Cheap substring guards avoid recompiling/running the inline regexes on the
+	# overwhelmingly common case of plain prose lines (large-site hot path).
+	if index_of(out, "![") >= 0 {
+		out := regex_replace(out, "!\\[([^\\]]*)\\]\\(([^\\)]+)\\)", "<img src=\"$2\" alt=\"$1\">")
+	}
+	if index_of(out, "[") >= 0 {
+		out := regex_replace(out, "\\[([^\\]]+)\\]\\(([^\\)]+)\\)", "<a href=\"$2\">$1</a>")
+	}
+	if index_of(out, "**") >= 0 {
+		out := regex_replace(out, "\\*\\*([^\\*]+)\\*\\*", "<strong>$1</strong>")
+	}
+	if index_of(out, "*") >= 0 {
+		out := regex_replace(out, "\\*([^\\*]+)\\*", "<em>$1</em>")
+	}
+	if index_of(out, "`") >= 0 {
+		out := regex_replace(out, "`([^`]+)`", "<code>$1</code>")
+	}
 	return out
 }
 
+# Delegates to the native markdown renderer (compiled once, byte-identical to
+# the previous interpreted implementation). The Kujo block/inline logic is
+# preserved in render_markdown_native in the runtime.
 func markdown_to_html(markdown) {
-	lines := split(markdown, "\n")
-	html_lines := []
-	in_list := false
-
-	line_idx := 0
-	loop {
-		if line_idx >= len(lines) {
-			break
-		}
-
-		raw_line := lines[line_idx]
-		line_idx := line_idx + 1
-		line := trim(raw_line)
-
-		if starts_with(line, "- ") || starts_with(line, "* ") {
-			item_text := inline_markdown(trim(substring(line, 2, len(line))))
-			if !in_list {
-				in_list := true
-				html_lines = push(html_lines, "<ul>")
-			}
-			html_lines = push(html_lines, "<li>" + item_text + "</li>")
-			continue
-		}
-
-		if in_list {
-			html_lines = push(html_lines, "</ul>")
-			in_list := false
-		}
-
-		if len(line) == 0 {
-			continue
-		}
-
-		if starts_with(line, "### ") {
-			html_lines = push(html_lines, "<h3>" + inline_markdown(trim(substring(line, 4, len(line)))) + "</h3>")
-			continue
-		}
-		if starts_with(line, "## ") {
-			html_lines = push(html_lines, "<h2>" + inline_markdown(trim(substring(line, 3, len(line)))) + "</h2>")
-			continue
-		}
-		if starts_with(line, "# ") {
-			html_lines = push(html_lines, "<h1>" + inline_markdown(trim(substring(line, 2, len(line)))) + "</h1>")
-			continue
-		}
-		if starts_with(line, "> ") {
-			html_lines = push(html_lines, "<blockquote><p>" + inline_markdown(trim(substring(line, 2, len(line)))) + "</p></blockquote>")
-			continue
-		}
-
-		html_lines = push(html_lines, "<p>" + inline_markdown(line) + "</p>")
-	}
-
-	if in_list {
-		html_lines = push(html_lines, "</ul>")
-	}
-
-	return join(html_lines, "\n")
+	return render_markdown(markdown)
 }
 
 func excerpt_from_markdown(markdown) {
@@ -657,7 +618,7 @@ func parse_frontmatter(content) {
 	meta["order"] = parse_int_value(meta["order"], 1000)
 	meta["tags"] = to_string_array(meta["tags"])
 	meta["categories"] = to_string_array(meta["categories"])
-	meta["taxonomies"] = {}
+	meta["taxonomies"] = normalize_taxonomies_map(meta["taxonomies"])
 
 	return {
 		"meta": meta,
@@ -682,17 +643,14 @@ func apply_template(template, data) {
 	return out
 }
 
+# Delegates to the native single-pass escaper (5 interpreted string passes →
+# one native pass); output is byte-identical to the previous implementation.
 func xml_escape(value) {
-	escaped := replace(value, "&", "&amp;")
-	escaped := replace(escaped, "<", "&lt;")
-	escaped := replace(escaped, ">", "&gt;")
-	escaped := replace(escaped, "\"", "&quot;")
-	escaped := replace(escaped, "'", "&apos;")
-	return escaped
+	return escape_xml(value)
 }
 
 func html_escape(value) {
-	return xml_escape(to_string(value))
+	return escape_xml(value)
 }
 
 func route_to_path(route) {
@@ -713,10 +671,14 @@ func navigation_item(href, label, is_current) {
 	return "<li><a href=\"" + safe_href + "\" class=\"text-primary hover:underline\"" + current_attr + ">" + safe_label + "</a></li>"
 }
 
-func build_navigation(pages_data, custom_collections, current_route) {
+func build_navigation(pages_data, custom_collections, current_route, blog_slug) {
 	current_path := route_to_path(current_route)
 	html := navigation_item("/", "Home", current_path == "/")
-	html = html + navigation_item("/blog/", "Blog", starts_with(current_path, "/blog/"))
+	clean_blog_slug := clean_slug(trim(to_string(blog_slug)))
+	if len(clean_blog_slug) > 0 && clean_blog_slug != "untitled" {
+		blog_path := "/" + clean_blog_slug + "/"
+		html = html + navigation_item(blog_path, "Blog", starts_with(current_path, blog_path))
+	}
 
 	page_idx := 0
 	loop {
@@ -916,6 +878,12 @@ func taxonomy_names_from_meta(meta, content_type, taxonomy_lookups) {
 		meta_key := meta_keys[j]
 		j := j + 1
 
+		# Fast path: reject reserved keys on the raw string before the much more
+		# expensive clean_slug() regex work (hot path for large sites).
+		if is_reserved_frontmatter_key(meta_key) {
+			continue
+		}
+
 		normalized_key := clean_slug(meta_key)
 		if normalized_key == "untitled" {
 			continue
@@ -931,6 +899,15 @@ func taxonomy_names_from_meta(meta, content_type, taxonomy_lookups) {
 	}
 
 	return names
+}
+
+# Render custom-taxonomy HTML, short-circuiting when the item cannot have any.
+func custom_taxonomies_html(meta, content_type, taxonomy_lookups, excluded, has_custom_tax_lookups) {
+	has_inline := is_dict(meta["taxonomies"]) && len(keys(meta["taxonomies"])) > 0
+	if !has_custom_tax_lookups && !has_inline {
+		return ""
+	}
+	return taxonomy_groups_html(resolve_taxonomy_groups(meta, content_type, taxonomy_lookups), excluded)
 }
 
 func resolve_taxonomy_groups(meta, content_type, taxonomy_lookups) {
@@ -1446,6 +1423,39 @@ func resolve_media_url(path_value, relative_prefix) {
 	return relative_prefix + media_path
 }
 
+# Build an absolute media URL for social cards (og:image/twitter:image need
+# absolute URLs). Falls back to empty when site_url is unknown.
+func absolute_media_url(path_value, site_url) {
+	media_path := trim(path_value)
+	if len(media_path) == 0 {
+		return ""
+	}
+	if starts_with(media_path, "http://") || starts_with(media_path, "https://") || starts_with(media_path, "//") {
+		return media_path
+	}
+	site := trim(site_url)
+	if len(site) == 0 {
+		return ""
+	}
+	if ends_with(site, "/") {
+		site = substring(site, 0, len(site) - 1)
+	}
+	if starts_with(media_path, "/") {
+		return site + media_path
+	}
+	return site + "/" + media_path
+}
+
+func json_escape(value) {
+	s := to_string(value)
+	s = replace(s, "\\", "\\\\")
+	s = replace(s, "\"", "\\\"")
+	s = replace(s, "\n", "\\n")
+	s = replace(s, "\r", "\\r")
+	s = replace(s, "\t", "\\t")
+	return s
+}
+
 func featured_image_html_tag(featured_image_url, title) {
 	url := trim(featured_image_url)
 	if len(url) == 0 {
@@ -1496,18 +1506,79 @@ func render_layout(layout_template, settings, route, page_title, meta_descriptio
 		og_url = route_absolute_url(site_url, route)
 	}
 
-	featured_image := resolve_media_url(meta_string(page_meta, "featured_image", ""), prefix)
+	raw_featured := meta_string(page_meta, "featured_image", "")
+	# Social cards need absolute URLs; fall back to a prefix-relative path
+	# only when no site_url is configured.
+	social_image := absolute_media_url(raw_featured, site_url)
+	if len(social_image) == 0 {
+		social_image = resolve_media_url(raw_featured, prefix)
+	}
 	canonical_tag := ""
 	if len(canonical_url) > 0 {
 		canonical_tag = "<link rel=\"canonical\" href=\"" + xml_escape(canonical_url) + "\">"
 	}
 	og_image_tag := ""
 	twitter_image_tag := ""
-	if len(featured_image) > 0 {
-		safe_image := xml_escape(featured_image)
+	if len(social_image) > 0 {
+		safe_image := xml_escape(social_image)
 		og_image_tag = "<meta property=\"og:image\" content=\"" + safe_image + "\">"
 		twitter_image_tag = "<meta name=\"twitter:image\" content=\"" + safe_image + "\">"
 	}
+
+	og_type := to_lower(meta_string(page_meta, "og_type", "website"))
+	if og_type != "article" {
+		og_type = "website"
+	}
+	og_locale := replace(lang, "-", "_")
+	if og_locale == "en" {
+		og_locale = "en_US"
+	}
+
+	# article:published_time + datePublished for posts.
+	published_iso := trim(meta_string(page_meta, "published_iso", ""))
+	og_article_tags := ""
+	if og_type == "article" {
+		if len(published_iso) > 0 {
+			og_article_tags = og_article_tags + "<meta property=\"article:published_time\" content=\"" + xml_escape(published_iso) + "\">"
+		}
+		if len(author_meta) > 0 {
+			og_article_tags = og_article_tags + "<meta property=\"article:author\" content=\"" + xml_escape(author_meta) + "\">"
+		}
+	}
+
+	# RSS autodiscovery only when an aux feed is actually produced.
+	rss_link_tag := ""
+	if len(site_url) > 0 && !settings["no_aux"] {
+		rss_link_tag = "<link rel=\"alternate\" type=\"application/rss+xml\" title=\"" + html_escape(settings["site_title"]) + "\" href=\"" + prefix + "feed/index.xml\">"
+	}
+
+	# Lightweight SVG favicon generated alongside the site (see build_site).
+	favicon_tag := "<link rel=\"icon\" type=\"image/svg+xml\" href=\"" + prefix + "favicon.svg\">"
+
+	# JSON-LD structured data.
+	schema_type := "WebSite"
+	if og_type == "article" {
+		schema_type = "BlogPosting"
+	}
+	json_ld_parts := [
+		"\"@context\":\"https://schema.org\"",
+		"\"@type\":\"" + schema_type + "\"",
+		"\"headline\":\"" + json_escape(seo_title) + "\"",
+		"\"name\":\"" + json_escape(seo_title) + "\"",
+		"\"description\":\"" + json_escape(seo_description) + "\"",
+		"\"url\":\"" + json_escape(og_url) + "\""
+	]
+	if len(social_image) > 0 {
+		json_ld_parts = push(json_ld_parts, "\"image\":\"" + json_escape(social_image) + "\"")
+	}
+	if og_type == "article" {
+		json_ld_parts = push(json_ld_parts, "\"author\":{\"@type\":\"Person\",\"name\":\"" + json_escape(author_meta) + "\"}")
+		if len(published_iso) > 0 {
+			json_ld_parts = push(json_ld_parts, "\"datePublished\":\"" + json_escape(published_iso) + "\"")
+		}
+	}
+	json_ld_parts = push(json_ld_parts, "\"publisher\":{\"@type\":\"Organization\",\"name\":\"" + json_escape(settings["site_title"]) + "\"}")
+	json_ld := "<script type=\"application/ld+json\">{" + join(json_ld_parts, ",") + "}</script>"
 
 	computed_title := build_page_title(seo_title, settings["site_title"])
 	safe_title := xml_escape(computed_title)
@@ -1536,8 +1607,14 @@ func render_layout(layout_template, settings, route, page_title, meta_descriptio
 			"author_meta": safe_author,
 			"canonical_tag": canonical_tag,
 			"og_url": safe_og_url,
+			"og_type": og_type,
+			"og_locale": xml_escape(og_locale),
 			"og_image_tag": og_image_tag,
+			"og_article_tags": og_article_tags,
 			"twitter_image_tag": twitter_image_tag,
+			"rss_link_tag": rss_link_tag,
+			"favicon_tag": favicon_tag,
+			"json_ld": json_ld,
 			"lang": lang,
 			"stylesheet_path": prefix + style_file,
 			"content": content
@@ -1681,112 +1758,265 @@ func minify_assets_recursive(path) {
 	}
 }
 
+func font_is_bundled(key) {
+	return key == "bree serif" || key == "inter" || key == "quicksand" || key == "open sans"
+}
+
+func font_generic_fallback(key) {
+	if key == "bree serif" {
+		return "serif"
+	}
+	return "sans-serif"
+}
+
+func bundled_font_face_lines(family, key) {
+	lines := []
+	if key == "bree serif" {
+		lines = push(lines, "@font-face { font-family: 'Bree Serif'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/bree-serif-latin-400.woff2') format('woff2'); }")
+		lines = push(lines, "@font-face { font-family: 'Bree Serif'; font-style: normal; font-weight: 700; font-display: swap; src: url('../fonts/bree-serif-latin-400.woff2') format('woff2'); }")
+	} else if key == "inter" {
+		lines = push(lines, "@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/inter-latin-400.woff2') format('woff2'); }")
+		lines = push(lines, "@font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('../fonts/inter-latin-700.woff2') format('woff2'); }")
+	} else if key == "quicksand" {
+		lines = push(lines, "@font-face { font-family: 'Quicksand'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/quicksand-latin.woff2') format('woff2'); }")
+	} else if key == "open sans" {
+		lines = push(lines, "@font-face { font-family: 'Open Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/open-sans-latin.woff2') format('woff2'); }")
+	}
+	lines = push(lines, "")
+	return lines
+}
+
+# Download a Google Font family (any family) and provision local woff2 files.
+# Returns {"ok": bool, "lines": [...], "error": str}. Prefers the latin subset
+# and caches downloads so repeat builds are deterministic and offline.
+func try_download_google_font(family, output_fonts_dir, cache_fonts_dir) {
+	out := {"ok": false, "lines": [], "error": ""}
+	slug := clean_slug(family)
+	api_family := replace(family, " ", "+")
+	url := "https://fonts.googleapis.com/css2?family=" + api_family + ":wght@400;700&display=swap"
+	ua := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+	css := ""
+	fetch_ok := false
+	fetch_error := "request failed"
+	try {
+		request_result := http_request(url, {"headers": {"User-Agent": ua}})
+		match request_result {
+			case Ok(resp): {
+				status := resp["status"]
+				if status == 200 {
+					css = to_string(resp["body"])
+					fetch_ok = true
+				} else {
+					fetch_error = "HTTP " + to_string(status)
+				}
+			}
+			case Err(request_err): {
+				fetch_error = safe_error_text(request_err)
+			}
+		}
+	} except err {
+		fetch_error = safe_error_text(err)
+	}
+	if !fetch_ok {
+		out["error"] = fetch_error
+		return out
+	}
+
+	if len(css) == 0 || index_of(css, "@font-face") < 0 {
+		out["error"] = "no @font-face in response"
+		return out
+	}
+
+	# Pick one woff2 URL per weight, preferring the latin subset (U+0000 range).
+	blocks := regex_split(css, "@font-face")
+	chosen := {}
+	bi := 0
+	loop {
+		if bi >= len(blocks) {
+			break
+		}
+		block := blocks[bi]
+		bi := bi + 1
+
+		urls := regex_find_all(block, "https://[^)\\s\"']+\\.woff2")
+		if len(urls) == 0 {
+			continue
+		}
+		font_url := urls[0]
+		weights := regex_find_all(block, "font-weight:[ ]*[0-9]+")
+		weight := "400"
+		if len(weights) > 0 {
+			digits := regex_replace(weights[0], "[^0-9]", "")
+			if len(digits) > 0 {
+				weight = digits
+			}
+		}
+		if index_of(block, "U+0000") >= 0 {
+			chosen[weight] = font_url
+		} else if has_key(chosen, weight) == 0 {
+			chosen[weight] = font_url
+		}
+	}
+
+	weight_keys := sort(keys(chosen))
+	if len(weight_keys) == 0 {
+		out["error"] = "no woff2 URLs found"
+		return out
+	}
+
+	lines := []
+	wi := 0
+	loop {
+		if wi >= len(weight_keys) {
+			break
+		}
+		weight := weight_keys[wi]
+		wi := wi + 1
+		font_url := chosen[weight]
+		file_name := slug + "-" + weight + ".woff2"
+		output_path := path_join(output_fonts_dir, file_name)
+		cache_path := path_join(cache_fonts_dir, file_name)
+
+		ensured := false
+		if path_exists(cache_path) {
+			try {
+				cached_bytes := read_binary_file(cache_path)
+				write_binary_file(output_path, cached_bytes)
+				ensured = true
+			} except err {
+				ensured = false
+			}
+		}
+		if !ensured {
+			try {
+				downloaded := http_get_binary(font_url)
+				write_binary_file(output_path, downloaded)
+				ensure_dir(cache_fonts_dir)
+				try {
+					write_binary_file(cache_path, downloaded)
+				} except cache_err {
+				}
+				ensured = true
+			} except err {
+				out["error"] = "download failed: " + safe_error_text(err)
+				return out
+			}
+		}
+
+		lines = push(lines, "@font-face { font-family: '" + family + "'; font-style: normal; font-weight: " + weight + "; font-display: swap; src: url('../fonts/" + file_name + "') format('woff2'); }")
+	}
+	lines = push(lines, "")
+
+	out["ok"] = true
+	out["lines"] = lines
+	return out
+}
+
+# Resolve a requested font family to renderable @font-face lines. Bundled
+# families are served offline; any other family is fetched from Google Fonts,
+# falling back to a bundled default if the network/capability is unavailable.
+func resolve_font_family(requested, default_family, settings, output_fonts_dir, cache_fonts_dir) {
+	family := trim(to_string(requested))
+	if len(family) == 0 {
+		family = default_family
+	}
+	key := to_lower(family)
+	if font_is_bundled(key) {
+		return {"family": family, "fallback": font_generic_fallback(key), "lines": bundled_font_face_lines(family, key)}
+	}
+
+	result := try_download_google_font(family, output_fonts_dir, cache_fonts_dir)
+	if result["ok"] {
+		return {"family": family, "fallback": "sans-serif", "lines": result["lines"]}
+	}
+
+	print("Warning: could not provision Google Font '" + family + "' (" + result["error"] + "); falling back to '" + default_family + "'. Re-run with --allow-net-client to enable font downloads.")
+	default_key := to_lower(default_family)
+	return {"family": default_family, "fallback": font_generic_fallback(default_key), "lines": bundled_font_face_lines(default_family, default_key)}
+}
+
 func generate_fonts_css(settings) {
 	fonts := to_string_array(settings["fonts"])
 	title_font := "Bree Serif"
 	body_font := "Inter"
-
 	if len(fonts) > 0 {
 		candidate_title := trim(to_string(fonts[0]))
 		if len(candidate_title) > 0 {
-			title_font := candidate_title
+			title_font = candidate_title
 		}
 	}
 	if len(fonts) > 1 {
 		candidate_body := trim(to_string(fonts[1]))
 		if len(candidate_body) > 0 {
-			body_font := candidate_body
+			body_font = candidate_body
 		}
-	}
-
-	title_key := to_lower(title_font)
-	body_key := to_lower(body_font)
-	if title_key != "quicksand" && title_key != "open sans" && title_key != "bree serif" && title_key != "inter" {
-		title_font := "Bree Serif"
-		title_key := "bree serif"
-	}
-	if body_key != "quicksand" && body_key != "open sans" && body_key != "inter" {
-		body_font := "Inter"
-		body_key := "inter"
 	}
 
 	css_dir := path_join(settings["output"], "assets/css")
 	ensure_dir(css_dir)
+	output_fonts_dir := path_join(settings["output"], "assets/fonts")
+	ensure_dir(output_fonts_dir)
+	# Downloaded Google Fonts are cached outside the asset tree so repeat builds
+	# stay offline and deterministic without polluting source-controlled assets.
+	cache_fonts_dir := ".cache/fonts"
+
+	resolved_title := resolve_font_family(title_font, "Bree Serif", settings, output_fonts_dir, cache_fonts_dir)
+	resolved_body := resolve_font_family(body_font, "Inter", settings, output_fonts_dir, cache_fonts_dir)
 
 	lines := ["/* Generated by Kujo SSG */", ""]
-	needs_bree := title_key == "bree serif" || body_key == "bree serif"
-	needs_inter := title_key == "inter" || body_key == "inter"
-	needs_quicksand := title_key == "quicksand" || body_key == "quicksand"
-	needs_open_sans := title_key == "open sans" || body_key == "open sans"
-
-	if needs_bree {
-		lines = push(lines, "@font-face {")
-		lines = push(lines, "\tfont-family: 'Bree Serif';")
-		lines = push(lines, "\tfont-style: normal;")
-		lines = push(lines, "\tfont-weight: 400;")
-		lines = push(lines, "\tfont-display: swap;")
-		lines = push(lines, "\tsrc: url('../fonts/bree-serif-latin-400.woff2') format('woff2');")
-		lines = push(lines, "}")
-		lines = push(lines, "")
-		lines = push(lines, "@font-face {")
-		lines = push(lines, "\tfont-family: 'Bree Serif';")
-		lines = push(lines, "\tfont-style: normal;")
-		lines = push(lines, "\tfont-weight: 700;")
-		lines = push(lines, "\tfont-display: swap;")
-		lines = push(lines, "\tsrc: url('../fonts/bree-serif-latin-400.woff2') format('woff2');")
-		lines = push(lines, "}")
-		lines = push(lines, "")
+	emitted := {}
+	slots := [resolved_title, resolved_body]
+	slot_idx := 0
+	loop {
+		if slot_idx >= len(slots) {
+			break
+		}
+		slot := slots[slot_idx]
+		slot_idx := slot_idx + 1
+		slot_key := to_lower(slot["family"])
+		if has_key(emitted, slot_key) {
+			continue
+		}
+		emitted[slot_key] = true
+		slot_lines := slot["lines"]
+		line_idx := 0
+		loop {
+			if line_idx >= len(slot_lines) {
+				break
+			}
+			lines = push(lines, slot_lines[line_idx])
+			line_idx := line_idx + 1
+		}
 	}
 
-	if needs_inter {
-		lines = push(lines, "@font-face {")
-		lines = push(lines, "\tfont-family: 'Inter';")
-		lines = push(lines, "\tfont-style: normal;")
-		lines = push(lines, "\tfont-weight: 400;")
-		lines = push(lines, "\tfont-display: swap;")
-		lines = push(lines, "\tsrc: url('../fonts/inter-latin-400.woff2') format('woff2');")
-		lines = push(lines, "}")
-		lines = push(lines, "")
-		lines = push(lines, "@font-face {")
-		lines = push(lines, "\tfont-family: 'Inter';")
-		lines = push(lines, "\tfont-style: normal;")
-		lines = push(lines, "\tfont-weight: 700;")
-		lines = push(lines, "\tfont-display: swap;")
-		lines = push(lines, "\tsrc: url('../fonts/inter-latin-700.woff2') format('woff2');")
-		lines = push(lines, "}")
-		lines = push(lines, "")
-	}
+	title_css_family := resolved_title["family"]
+	body_css_family := resolved_body["family"]
+	title_fallback := resolved_title["fallback"]
+	body_fallback := resolved_body["fallback"]
 
-	if needs_quicksand {
-		lines = push(lines, "@font-face {")
-		lines = push(lines, "\tfont-family: 'Quicksand';")
-		lines = push(lines, "\tfont-style: normal;")
-		lines = push(lines, "\tfont-weight: 400;")
-		lines = push(lines, "\tfont-display: swap;")
-		lines = push(lines, "\tsrc: url('../fonts/quicksand-latin.woff2') format('woff2');")
-		lines = push(lines, "}")
-		lines = push(lines, "")
-	}
-
-	if needs_open_sans {
-		lines = push(lines, "@font-face {")
-		lines = push(lines, "\tfont-family: 'Open Sans';")
-		lines = push(lines, "\tfont-style: normal;")
-		lines = push(lines, "\tfont-weight: 400;")
-		lines = push(lines, "\tfont-display: swap;")
-		lines = push(lines, "\tsrc: url('../fonts/open-sans-latin.woff2') format('woff2');")
-		lines = push(lines, "}")
-		lines = push(lines, "")
-	}
-
-	lines = push(lines, "body { font-family: '" + body_font + "', sans-serif; }")
-	lines = push(lines, "h1, h2, h3, h4, h5, h6, .title-font { font-family: '" + title_font + "', serif; }")
-	lines = push(lines, ".font-body-light { font-family: '" + body_font + "', sans-serif; font-weight: 300; }")
-	lines = push(lines, ".font-heading-bold { font-family: '" + title_font + "', serif; font-weight: 700; }")
+	lines = push(lines, "body { font-family: '" + body_css_family + "', " + body_fallback + "; }")
+	lines = push(lines, "h1, h2, h3, h4, h5, h6, .title-font { font-family: '" + title_css_family + "', " + title_fallback + "; }")
+	lines = push(lines, ".font-body-light { font-family: '" + body_css_family + "', " + body_fallback + "; font-weight: 300; }")
+	lines = push(lines, ".font-heading-bold { font-family: '" + title_css_family + "', " + title_fallback + "; font-weight: 700; }")
 
 	write_file(path_join(css_dir, "fonts.css"), join(lines, "\n") + "\n")
 }
 
+func pagination_page_link(page, current_page, base_path) {
+	route := base_path
+	if page != 1 {
+		route = base_path + "page/" + to_string(page) + "/"
+	}
+	if page == current_page {
+		return "<strong aria-current=\"page\">" + to_string(page) + "</strong>"
+	}
+	return "<a href=\"/" + route + "\">" + to_string(page) + "</a>"
+}
+
+# Windowed pagination (first … current-2..current+2 … last). O(1) per page
+# instead of O(total_pages), which keeps large-site listing generation linear
+# and produces a usable control instead of a thousand-link bar.
 func build_pagination_links(current_page, total_pages, base_path) {
 	if total_pages <= 1 {
 		return ""
@@ -1794,41 +2024,46 @@ func build_pagination_links(current_page, total_pages, base_path) {
 	html := "<nav class=\"pagination\" aria-label=\"Pagination\">"
 
 	if current_page > 1 {
-		prev_route := ""
-		if current_page - 1 == 1 {
-			prev_route := base_path
-		} else {
-			prev_route := base_path + "page/" + to_string(current_page - 1) + "/"
+		prev_route := base_path
+		if current_page - 1 != 1 {
+			prev_route = base_path + "page/" + to_string(current_page - 1) + "/"
 		}
-		html := html + "<a href=\"/" + prev_route + "\" rel=\"prev\">Previous</a>"
+		html = html + "<a href=\"/" + prev_route + "\" rel=\"prev\">Previous</a>"
 	}
 
-	page := 1
+	delta := 2
+	window_start := current_page - delta
+	if window_start < 2 {
+		window_start = 2
+	}
+	window_end := current_page + delta
+	if window_end > total_pages - 1 {
+		window_end = total_pages - 1
+	}
+
+	html = html + pagination_page_link(1, current_page, base_path)
+	if window_start > 2 {
+		html = html + "<span class=\"pagination-gap\" aria-hidden=\"true\">…</span>"
+	}
+	page := window_start
 	loop {
-		if page > total_pages {
+		if page > window_end {
 			break
 		}
-		route := ""
-		if page == 1 {
-			route := base_path
-		} else {
-			route := base_path + "page/" + to_string(page) + "/"
-		}
-
-		if page == current_page {
-			html := html + "<strong aria-current=\"page\">" + to_string(page) + "</strong>"
-		} else {
-			html := html + "<a href=\"/" + route + "\">" + to_string(page) + "</a>"
-		}
-		page := page + 1
+		html = html + pagination_page_link(page, current_page, base_path)
+		page = page + 1
 	}
+	if window_end < total_pages - 1 {
+		html = html + "<span class=\"pagination-gap\" aria-hidden=\"true\">…</span>"
+	}
+	html = html + pagination_page_link(total_pages, current_page, base_path)
 
 	if current_page < total_pages {
 		next_route := base_path + "page/" + to_string(current_page + 1) + "/"
-		html := html + "<a href=\"/" + next_route + "\" rel=\"next\">Next</a>"
+		html = html + "<a href=\"/" + next_route + "\" rel=\"next\">Next</a>"
 	}
 
-	html := html + "</nav>"
+	html = html + "</nav>"
 	return html
 }
 
@@ -1908,6 +2143,130 @@ func listing_card_html(route, title, excerpt, featured_image, terms, action_labe
 	return "<li class=\"listing-card\">" + media_block + "<div class=\"listing-card-body\">" + tags_block + "<h2 class=\"listing-card-title\"><a href=\"" + safe_href + "\" class=\"text-links\">" + safe_title + "</a></h2><p class=\"listing-card-excerpt\">" + safe_excerpt + "</p><a href=\"" + safe_href + "\" class=\"listing-card-button\">" + safe_button_text + "</a></div></li>"
 }
 
+func pad2(n) {
+	s := to_string(n)
+	if len(s) < 2 {
+		return "0" + s
+	}
+	return s
+}
+
+func month_index_from_name(name) {
+	key := to_lower(trim(name))
+	if len(key) > 3 {
+		key = substring(key, 0, 3)
+	}
+	abbr := ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+	i := 0
+	loop {
+		if i >= len(abbr) {
+			break
+		}
+		if abbr[i] == key {
+			return i + 1
+		}
+		i := i + 1
+	}
+	return 0
+}
+
+# Parse a frontmatter date into normalized parts. Accepts ISO (YYYY-MM-DD,
+# optionally with a T/space time), YYYY/MM/DD, MM/DD/YYYY, "Month DD, YYYY",
+# and "DD Month YYYY". Returns a dict; "valid" is false for unparseable input.
+func parse_post_date(raw) {
+	invalid := {"valid": false, "year": 0, "month": 0, "day": 0, "sort_key": 0, "display": "", "rfc822": "", "iso": ""}
+	text := trim(to_string(raw))
+	if len(text) == 0 {
+		return invalid
+	}
+
+	year := 0
+	month := 0
+	day := 0
+
+	normalized := replace(text, ",", " ")
+	raw_tokens := split(normalized, " ")
+	tokens := []
+	ti := 0
+	loop {
+		if ti >= len(raw_tokens) {
+			break
+		}
+		tk := trim(raw_tokens[ti])
+		ti := ti + 1
+		if len(tk) > 0 {
+			tokens = push(tokens, tk)
+		}
+	}
+	if len(tokens) == 0 {
+		return invalid
+	}
+
+	first := tokens[0]
+	if index_of(first, "-") >= 0 {
+		date_only := split(first, "T")[0]
+		parts := split(date_only, "-")
+		if len(parts) >= 3 {
+			year = parse_int_value(parts[0], 0)
+			month = parse_int_value(parts[1], 0)
+			day = parse_int_value(parts[2], 0)
+		}
+	} else if index_of(first, "/") >= 0 {
+		parts := split(first, "/")
+		if len(parts) >= 3 {
+			if len(parts[0]) == 4 {
+				year = parse_int_value(parts[0], 0)
+				month = parse_int_value(parts[1], 0)
+				day = parse_int_value(parts[2], 0)
+			} else {
+				month = parse_int_value(parts[0], 0)
+				day = parse_int_value(parts[1], 0)
+				year = parse_int_value(parts[2], 0)
+			}
+		}
+	} else {
+		leading_month := month_index_from_name(tokens[0])
+		if leading_month > 0 && len(tokens) >= 3 {
+			month = leading_month
+			day = parse_int_value(tokens[1], 0)
+			year = parse_int_value(tokens[2], 0)
+		} else if len(tokens) >= 3 {
+			day = parse_int_value(tokens[0], 0)
+			month = month_index_from_name(tokens[1])
+			year = parse_int_value(tokens[2], 0)
+		}
+	}
+
+	if year <= 0 || month < 1 || month > 12 || day < 1 || day > 31 {
+		return invalid
+	}
+
+	full_names := ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+	abbr_names := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+	display := full_names[month - 1] + " " + to_string(day) + ", " + to_string(year)
+
+	# Sakamoto's algorithm for day-of-week (0 = Sunday).
+	sakamoto := [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+	y := year
+	if month < 3 {
+		y = y - 1
+	}
+	dow := (y + y / 4 - y / 100 + y / 400 + sakamoto[month - 1] + day) % 7
+	dow_names := ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+	rfc822 := dow_names[dow] + ", " + pad2(day) + " " + abbr_names[month - 1] + " " + to_string(year) + " 00:00:00 +0000"
+
+	return {
+		"valid": true,
+		"year": year,
+		"month": month,
+		"day": day,
+		"sort_key": year * 10000 + month * 100 + day,
+		"display": display,
+		"rfc822": rfc822,
+		"iso": to_string(year) + "-" + pad2(month) + "-" + pad2(day)
+	}
+}
+
 func post_sort_before(a, b, sort_by) {
 	if sort_by == "title" {
 		return to_lower(a["title"]) < to_lower(b["title"])
@@ -1918,8 +2277,8 @@ func post_sort_before(a, b, sort_by) {
 	if sort_by == "order" {
 		return a["order"] < b["order"]
 	}
-	# Default date sort: newest first.
-	return to_string(a["date"]) > to_string(b["date"])
+	# Default date sort: newest first, by normalized numeric key.
+	return a["date_sort_key"] > b["date_sort_key"]
 }
 
 func sort_posts(posts, sort_by) {
@@ -1951,6 +2310,102 @@ func sort_posts(posts, sort_by) {
 		i := i + 1
 	}
 	return sorted_posts
+}
+
+# --- Scale-friendly accumulation helpers -------------------------------------
+# Kujo arrays are copy-on-write, so `arr = push(arr, x)` in a hot loop is O(n^2)
+# and an in-language sort is O(n^3). For large sites we instead accumulate
+# records into a string (string concat is amortized O(n)), build the array in a
+# single `split` call, and sort once with the native O(n log n) `sort`.
+
+func pad_number(value, width) {
+	s := to_string(value)
+	loop {
+		if len(s) >= width {
+			break
+		}
+		s = "0" + s
+	}
+	return s
+}
+
+# Lexicographic sort prefix so a single native string sort yields the requested
+# order. Date is descending (newest first); title/author ascending; order asc.
+func post_sort_prefix(sort_by, date_sort_key, title, author, order) {
+	if sort_by == "title" {
+		return to_lower(title)
+	}
+	if sort_by == "author" {
+		return to_lower(author)
+	}
+	if sort_by == "order" {
+		return pad_number(order, 8)
+	}
+	return pad_number(99999999 - date_sort_key, 8)
+}
+
+# changefreq/priority + lastmod for a single sitemap entry. Emitted incrementally
+# as a string instead of accumulating a routes array.
+func sitemap_url_entry(site_url, route, lastmod_iso, blog_prefix) {
+	url := site_url + "/"
+	if len(route) > 0 {
+		url = site_url + "/" + route
+	}
+
+	changefreq := "monthly"
+	priority := "0.7"
+	if len(route) == 0 {
+		changefreq = "weekly"
+		priority = "1.0"
+	} else if len(blog_prefix) > 0 && route == blog_prefix {
+		changefreq = "daily"
+		priority = "0.9"
+	} else if len(blog_prefix) > 0 && starts_with(route, blog_prefix + "page/") {
+		changefreq = "weekly"
+		priority = "0.6"
+	} else if len(blog_prefix) > 0 && starts_with(route, blog_prefix) {
+		changefreq = "monthly"
+		priority = "0.8"
+	} else if starts_with(route, "page/") {
+		changefreq = "weekly"
+		priority = "0.6"
+	}
+
+	entry := "  <url>\n    <loc>" + xml_escape(url) + "</loc>\n"
+	clean_lastmod := trim(to_string(lastmod_iso))
+	if len(clean_lastmod) == 10 {
+		entry = entry + "    <lastmod>" + xml_escape(clean_lastmod) + "</lastmod>\n"
+	}
+	entry = entry + "    <changefreq>" + changefreq + "</changefreq>\n    <priority>" + priority + "</priority>\n  </url>\n"
+	return entry
+}
+
+# Parse a tab-delimited post index record back into a dict for rendering.
+func parse_post_record(line) {
+	f := split(line, "\t")
+	record := {"route": "", "title": "", "excerpt": "", "featured_image": "", "tags": [], "date_rfc822": "", "date_iso": ""}
+	if len(f) > 1 {
+		record["route"] = f[1]
+	}
+	if len(f) > 2 {
+		record["title"] = f[2]
+	}
+	if len(f) > 3 {
+		record["excerpt"] = f[3]
+	}
+	if len(f) > 4 {
+		record["featured_image"] = f[4]
+	}
+	if len(f) > 5 && len(f[5]) > 0 {
+		record["tags"] = split(f[5], ",")
+	}
+	if len(f) > 6 {
+		record["date_rfc822"] = f[6]
+	}
+	if len(f) > 7 {
+		record["date_iso"] = f[7]
+	}
+	return record
 }
 
 func create_sample_config(format_name) {
@@ -2154,6 +2609,9 @@ func apply_cli_overrides(settings, cli_args) {
 			{"flag": "--robots", "key": "robots"},
 			{"flag": "--llms", "key": "llms"},
 			{"flag": "--blog-slug", "key": "blog_slug"},
+			{"flag": "--phase", "key": "phase"},
+			{"flag": "--shard", "key": "shard"},
+			{"flag": "--shards", "key": "shards"},
 			{"flag": "--init", "key": "init"}
 		]
 
@@ -2316,6 +2774,26 @@ func normalize_settings(settings) {
 		settings["assets"] = "assets"
 	}
 
+	# Phased/sharded build controls (used by the parallel orchestrator). The
+	# default "full" phase reproduces the standard single-process build exactly.
+	phase := to_lower(trim(to_string(settings["phase"])))
+	if len(phase) == 0 {
+		phase := "full"
+	}
+	if !string_in_list(phase, ["full", "setup", "posts", "finalize"]) {
+		result["errors"] = push(result["errors"], "Invalid value for phase: " + to_string(settings["phase"]) + " (expected full, setup, posts, or finalize)")
+		phase := "full"
+	}
+	settings["phase"] = phase
+	settings["shards"] = parse_int_value(settings["shards"], 1)
+	if settings["shards"] < 1 {
+		settings["shards"] = 1
+	}
+	settings["shard"] = parse_int_value(settings["shard"], 0)
+	if settings["shard"] < 0 {
+		settings["shard"] = 0
+	}
+
 	result["settings"] = settings
 	return result
 }
@@ -2351,13 +2829,50 @@ func build_site(settings) {
 		site_url := substring(site_url, 0, len(site_url) - 1)
 	}
 
-	if path_exists(output_dir) {
-		delete_tree(output_dir)
-	}
-	ensure_dir(output_dir)
+	# Phase controls. "full" (default) is the standard single-process build.
+	# "setup"/"posts"/"finalize" split the work so an orchestrator can render
+	# post shards across processes (see scripts/build-parallel.sh).
+	phase := settings["phase"]
+	shard := settings["shard"]
+	shards := settings["shards"]
+	do_setup := phase == "full" || phase == "setup"
+	do_posts := phase == "full" || phase == "posts"
+	do_finalize := phase == "full" || phase == "finalize"
 
-	copy_assets(settings)
-	generate_fonts_css(settings)
+	if do_setup {
+		if path_exists(output_dir) {
+			delete_tree(output_dir)
+		}
+		ensure_dir(output_dir)
+
+		copy_assets(settings)
+		generate_fonts_css(settings)
+
+		# Generate a lightweight SVG favicon from the site initial.
+		favicon_initial := "K"
+		favicon_title := trim(to_string(settings["site_title"]))
+		if len(favicon_title) > 0 {
+			favicon_initial = to_upper(substring(favicon_title, 0, 1))
+		}
+		favicon_svg := "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"12\" fill=\"#0f172a\"/><text x=\"32\" y=\"43\" font-family=\"system-ui, sans-serif\" font-size=\"36\" font-weight=\"700\" fill=\"#ffffff\" text-anchor=\"middle\">" + xml_escape(favicon_initial) + "</text></svg>\n"
+		write_file(path_join(output_dir, "favicon.svg"), favicon_svg)
+
+		# Write a post-file manifest once. Sharded workers read this instead of
+		# re-listing the (potentially huge) posts directory, which avoids both
+		# redundant work and filesystem contention when many workers list the
+		# same large directory concurrently.
+		if phase == "setup" {
+			setup_post_files := markdown_files(path_join(content_root, "posts"))
+			write_file(path_join(output_dir, ".kujo-post-manifest.txt"), join(setup_post_files, "\n") + "\n")
+		}
+	}
+
+	if phase == "setup" {
+		print_lines(["Setup phase complete", "  Output directory: " + output_dir])
+		return null
+	}
+
+	ensure_dir(output_dir)
 
 	layout_fallback := "<!DOCTYPE html><html lang=\"{{lang}}\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>{{page_title}}</title><meta name=\"description\" content=\"{{meta_description}}\"><meta name=\"keywords\" content=\"{{seo_keywords}}\"><meta name=\"author\" content=\"{{author_meta}}\">{{canonical_tag}}<meta property=\"og:title\" content=\"{{seo_title}}\"><meta property=\"og:description\" content=\"{{seo_description}}\"><meta property=\"og:url\" content=\"{{og_url}}\"><meta property=\"og:type\" content=\"website\">{{og_image_tag}}<meta name=\"twitter:card\" content=\"summary_large_image\"><meta name=\"twitter:title\" content=\"{{seo_title}}\"><meta name=\"twitter:description\" content=\"{{seo_description}}\">{{twitter_image_tag}}<link rel=\"stylesheet\" href=\"{{stylesheet_path}}\"></head><body><a class=\"skip-link\" href=\"#main-content\">Skip to main content</a><header><h1><a href=\"{{home_path}}\">{{site_name}}</a></h1><nav aria-label=\"Primary navigation\"><ul>{{navigation}}</ul></nav></header><main id=\"main-content\">{{content}}</main><footer><p>{{site_tagline}}</p></footer></body></html>"
 	post_fallback := "<article><h1>{{title}}</h1>{{featured_image_html}}<p>{{date}} {{author}}</p><div>{{categories_html}}</div><div>{{tags_html}}</div>{{taxonomies_html}}<section>{{body}}</section></article>"
@@ -2404,9 +2919,43 @@ func build_site(settings) {
 	tags_lookup := load_lookup(path_join(content_root, "tags.yml"))
 	color_lookup := load_lookup(path_join(content_root, "color.yml"))
 	locations_lookup := load_lookup(path_join(content_root, "storefronts-location.yml"))
+	taxonomy_lookups := load_taxonomy_lookups(content_root)
+	reserved_taxonomy_slots := ["categories", "tags", "color", "location"]
+	# Custom-taxonomy rendering is only possible if there is a non-core taxonomy
+	# lookup, or a given item declares `taxonomies:`. Precompute the cheap half so
+	# the per-item hot path can skip the expensive discovery work entirely.
+	has_custom_tax_lookups := false
+	tax_lookup_keys := keys(taxonomy_lookups)
+	tax_lookup_key_idx := 0
+	loop {
+		if tax_lookup_key_idx >= len(tax_lookup_keys) {
+			break
+		}
+		tax_lk := tax_lookup_keys[tax_lookup_key_idx]
+		tax_lookup_key_idx := tax_lookup_key_idx + 1
+		if tax_lk != "global:categories" && tax_lk != "global:tags" {
+			has_custom_tax_lookups = true
+			break
+		}
+	}
 
 	page_files := markdown_files(path_join(content_root, "pages"))
-	post_files := markdown_files(path_join(content_root, "posts"))
+	# In sharded phases, read the manifest written by setup to avoid every worker
+	# re-listing a huge posts directory at once (robustness + less redundant work).
+	post_files := []
+	if phase == "full" {
+		post_files = markdown_files(path_join(content_root, "posts"))
+	} else {
+		post_manifest := path_join(output_dir, ".kujo-post-manifest.txt")
+		if path_exists(post_manifest) {
+			manifest_text := trim(read_file(post_manifest))
+			if len(manifest_text) > 0 {
+				post_files = split(manifest_text, "\n")
+			}
+		} else {
+			post_files = markdown_files(path_join(content_root, "posts"))
+		}
+	}
 	custom_collections := []
 	if path_exists(content_root) && path_is_dir(content_root) {
 		content_entries := sort(list_dir(content_root))
@@ -2489,7 +3038,7 @@ func build_site(settings) {
 		author_name := resolve_lookup(meta["author"], authors_lookup, "")
 		page_categories := meta_terms(meta, "categories", categories_lookup)
 		page_tags := meta_terms(meta, "tags", tags_lookup)
-		page_custom_taxonomies_html := ""
+		page_custom_taxonomies_html := custom_taxonomies_html(meta, "pages", taxonomy_lookups, reserved_taxonomy_slots, has_custom_tax_lookups)
 		pages_data = push(pages_data, {
 			"title": title,
 			"slug": slug,
@@ -2513,13 +3062,38 @@ func build_site(settings) {
 		})
 	}
 
-	all_routes := [""]
+	# Sitemap is built incrementally as a string (O(n)) instead of accumulating
+	# a routes array (O(n^2) under copy-on-write).
+	blog_prefix := ""
+	if len(settings["blog_slug"]) > 0 {
+		blog_prefix := settings["blog_slug"] + "/"
+	}
+	want_sitemap := !settings["no_aux"] && len(site_url) > 0
+	# Large accumulators are streamed to temp files: both array push and string
+	# concatenation are O(n^2) in Kujo, but file append is O(1). In sharded mode
+	# each posts worker writes its own records/sitemap temp files, which the
+	# finalize phase reads back and merges.
+	sitemap_tmp := path_join(output_dir, ".kujo-sitemap.tmp")
+	records_tmp := path_join(output_dir, ".kujo-post-index.tmp")
+	if phase == "posts" {
+		records_tmp = path_join(output_dir, ".kujo-records-" + to_string(shard) + ".tmp")
+		sitemap_tmp = path_join(output_dir, ".kujo-sitemap-posts-" + to_string(shard) + ".tmp")
+	} else if phase == "finalize" {
+		sitemap_tmp = path_join(output_dir, ".kujo-sitemap-final.tmp")
+	}
+	if path_exists(sitemap_tmp) {
+		delete_file(sitemap_tmp)
+	}
+	if path_exists(records_tmp) {
+		delete_file(records_tmp)
+	}
+
 	built_pages := []
 	storefront_preview_cards := ""
 	location_preview_cards := ""
 	page_data_idx := 0
 	loop {
-		if page_data_idx >= len(pages_data) {
+		if page_data_idx >= len(pages_data) || !do_finalize {
 			break
 		}
 
@@ -2544,7 +3118,7 @@ func build_site(settings) {
 			"taxonomies_html": page_data["taxonomies_html"],
 			"body": markdown_to_html(page_data["body"])
 		})
-		page_navigation := build_navigation(pages_data, custom_collections, page_data["route"])
+		page_navigation := build_navigation(pages_data, custom_collections, page_data["route"], settings["blog_slug"])
 		page_html := render_layout(
 			layout_template,
 			settings,
@@ -2565,19 +3139,34 @@ func build_site(settings) {
 		)
 		write_route_page(output_dir, page_data["route"], page_html)
 		write_route_alias(output_dir, page_data["route"])
-		all_routes = push(all_routes, page_data["route"])
+		if want_sitemap {
+			page_lastmod := parse_post_date(page_data["date"])
+			append_file(sitemap_tmp, sitemap_url_entry(site_url, page_data["route"], page_lastmod["iso"], blog_prefix))
+		}
 		built_pages = push(built_pages, page_data)
 	}
 
-	posts_data := []
+	# Posts accumulate as tab-delimited record lines streamed to a temp file
+	# (O(1) appends); the index is materialized once via read+split and ordered
+	# once via the native sort().
+	post_count := 0
+	newest_date_sort := 0
+	newest_rfc822 := ""
 	post_file_idx := 0
 	loop {
-		if post_file_idx >= len(post_files) {
+		if post_file_idx >= len(post_files) || !do_posts {
 			break
 		}
 
+		current_post_index := post_file_idx
 		post_file := post_files[post_file_idx]
 		post_file_idx := post_file_idx + 1
+		# Shard filter: in "full" mode shards==1 so every post is rendered here;
+		# in "posts" mode each worker renders only its stripe of the posts.
+		post_stripe := current_post_index % shards
+		if post_stripe != shard {
+			continue
+		}
 		parsed := parse_frontmatter(read_file(post_file))
 		meta := parsed["meta"]
 		if parse_bool_value(meta["draft"], false) {
@@ -2600,7 +3189,7 @@ func build_site(settings) {
 		categories := meta_terms(meta, "categories", categories_lookup)
 		tags := meta_terms(meta, "tags", tags_lookup)
 		color_terms := meta_terms(meta, "color", color_lookup)
-		post_custom_taxonomies_html := ""
+		post_custom_taxonomies_html := custom_taxonomies_html(meta, "posts", taxonomy_lookups, reserved_taxonomy_slots, has_custom_tax_lookups)
 
 		description := trim(to_string(meta["description"]))
 		if len(description) == 0 {
@@ -2623,6 +3212,15 @@ func build_site(settings) {
 		excerpt := trim(to_string(meta["excerpt"]))
 		if len(excerpt) == 0 {
 			excerpt := excerpt_from_markdown(parsed["body"])
+		} else {
+			excerpt := trim(regex_replace(regex_replace(markdown_to_html(excerpt), "<[^>]+>", " "), "\\s+", " "))
+		}
+
+		post_date_raw := trim(to_string(meta["date"]))
+		post_date := parse_post_date(post_date_raw)
+		post_date_display := post_date_raw
+		if post_date["valid"] {
+			post_date_display = post_date["display"]
 		}
 
 		category_text := ""
@@ -2650,7 +3248,7 @@ func build_site(settings) {
 		post_inner := apply_template(selected_post_template, {
 			"title": title,
 			"author": author_name,
-			"date": trim(to_string(meta["date"])),
+			"date": post_date_display,
 			"category": category_text,
 			"categories": join(categories, ", "),
 			"categories_html": taxonomy_terms_html(categories),
@@ -2662,7 +3260,7 @@ func build_site(settings) {
 			"body": markdown_to_html(parsed["body"])
 		})
 
-		post_navigation := build_navigation(pages_data, custom_collections, route)
+		post_navigation := build_navigation(pages_data, custom_collections, route, settings["blog_slug"])
 		post_html := render_layout(
 			layout_template,
 			settings,
@@ -2678,27 +3276,88 @@ func build_site(settings) {
 				"lang": lang,
 				"canonical": canonical,
 				"featured_image": featured_image,
-				"author": author_name
+				"author": author_name,
+				"og_type": "article",
+				"published_iso": post_date["iso"]
 			}
 		)
 		write_route_page(output_dir, route, post_html)
 		write_route_alias(output_dir, route)
 
-		all_routes = push(all_routes, route)
-		posts_data = push(posts_data, {
-			"title": title,
-			"author": author_name,
-			"date": trim(to_string(meta["date"])),
-			"description": description,
-			"excerpt": excerpt,
-			"featured_image": featured_image,
-			"tags": tags,
-			"route": route,
-			"order": parse_int_value(meta["order"], 1000)
-		})
+		if want_sitemap {
+			append_file(sitemap_tmp, sitemap_url_entry(site_url, route, post_date["iso"], blog_prefix))
+		}
+
+		if post_date["sort_key"] > newest_date_sort {
+			newest_date_sort = post_date["sort_key"]
+			newest_rfc822 = post_date["rfc822"]
+		}
+
+		order_val := parse_int_value(meta["order"], 1000)
+		post_sort_key := post_sort_prefix(settings["sort_by"], post_date["sort_key"], title, author_name, order_val)
+		post_record := post_sort_key + "\t" + route + "\t" + title + "\t" + excerpt + "\t" + featured_image + "\t" + join(tags, ",") + "\t" + post_date["rfc822"] + "\t" + post_date["iso"]
+		append_file(records_tmp, post_record + "\n")
+		post_count := post_count + 1
 	}
 
-	posts_sorted := sort_posts(posts_data, settings["sort_by"])
+	# Posts phase: this worker rendered its stripe of posts and wrote its shard
+	# record/sitemap temp files. The finalize phase assembles everything else.
+	if phase == "posts" {
+		print_lines([
+			"Posts phase complete (shard " + to_string(shard) + " of " + to_string(shards) + ")",
+			"  Posts rendered: " + to_string(post_count)
+		])
+		return null
+	}
+
+	# Materialize and order the post index in a few native, near-linear calls.
+	# In finalize, merge every shard's record file first.
+	posts_sorted := []
+	combined_records := ""
+	if phase == "finalize" {
+		merge_shard_idx := 0
+		loop {
+			if merge_shard_idx >= shards {
+				break
+			}
+			shard_records := path_join(output_dir, ".kujo-records-" + to_string(merge_shard_idx) + ".tmp")
+			merge_shard_idx := merge_shard_idx + 1
+			if path_exists(shard_records) {
+				shard_chunk := trim(read_file(shard_records))
+				if len(shard_chunk) > 0 {
+					if len(combined_records) > 0 {
+						combined_records = combined_records + "\n"
+					}
+					combined_records = combined_records + shard_chunk
+				}
+			}
+		}
+	} else if post_count > 0 && path_exists(records_tmp) {
+		combined_records = trim(read_file(records_tmp))
+		delete_file(records_tmp)
+	}
+	if len(combined_records) > 0 {
+		posts_sorted = sort(split(combined_records, "\n"))
+	}
+
+	# In finalize, posts weren't re-rendered here, so derive the newest post date
+	# (for RSS lastBuildDate) from the merged records.
+	if phase == "finalize" {
+		newest_iso := ""
+		newest_scan_idx := 0
+		loop {
+			if newest_scan_idx >= len(posts_sorted) {
+				break
+			}
+			scan_record := parse_post_record(posts_sorted[newest_scan_idx])
+			newest_scan_idx := newest_scan_idx + 1
+			scan_iso := trim(to_string(scan_record["date_iso"]))
+			if len(scan_iso) == 10 && scan_iso > newest_iso {
+				newest_iso = scan_iso
+				newest_rfc822 = trim(to_string(scan_record["date_rfc822"]))
+			}
+		}
+	}
 
 	collection_idx := 0
 	loop {
@@ -2766,13 +3425,22 @@ func build_site(settings) {
 			excerpt := trim(to_string(meta["excerpt"]))
 			if len(excerpt) == 0 {
 				excerpt := excerpt_from_markdown(parsed["body"])
+			} else {
+				excerpt := trim(regex_replace(regex_replace(markdown_to_html(excerpt), "<[^>]+>", " "), "\\s+", " "))
+			}
+
+			item_date_raw := trim(to_string(meta["date"]))
+			item_date := parse_post_date(item_date_raw)
+			item_date_display := item_date_raw
+			if item_date["valid"] {
+				item_date_display = item_date["display"]
 			}
 
 			item_categories := meta_terms(meta, "categories", categories_lookup)
 			tags := meta_terms(meta, "tags", tags_lookup)
 			color_terms := meta_terms(meta, "color", color_lookup)
 			location_terms := meta_terms(meta, "location", locations_lookup)
-			item_custom_taxonomies_html := ""
+			item_custom_taxonomies_html := custom_taxonomies_html(meta, collection_slug, taxonomy_lookups, reserved_taxonomy_slots, has_custom_tax_lookups)
 
 			item_category_text := collection_title
 			if len(item_categories) > 0 {
@@ -2794,7 +3462,7 @@ func build_site(settings) {
 			item_inner := apply_template(selected_collection_template, {
 				"title": title,
 				"author": resolve_lookup(meta["author"], authors_lookup, "Unknown Author"),
-				"date": trim(to_string(meta["date"])),
+				"date": item_date_display,
 				"category": item_category_text,
 				"categories": join(item_categories, ", "),
 				"categories_html": taxonomy_terms_html(item_categories),
@@ -2808,7 +3476,7 @@ func build_site(settings) {
 			})
 			item_author_name := resolve_lookup(meta["author"], authors_lookup, "Unknown Author")
 
-			item_navigation := build_navigation(pages_data, custom_collections, route)
+			item_navigation := build_navigation(pages_data, custom_collections, route, settings["blog_slug"])
 			item_html := render_layout(
 				layout_template,
 				settings,
@@ -2824,17 +3492,25 @@ func build_site(settings) {
 					"lang": lang,
 					"canonical": canonical,
 					"featured_image": featured_image,
-					"author": item_author_name
+					"author": item_author_name,
+					"og_type": "article",
+					"published_iso": item_date["iso"]
 				}
 			)
 			write_route_page(output_dir, route, item_html)
 			write_route_alias(output_dir, route)
 
-			all_routes = push(all_routes, route)
+			if want_sitemap {
+				append_file(sitemap_tmp, sitemap_url_entry(site_url, route, item_date["iso"], blog_prefix))
+			}
 			collection_items = push(collection_items, {
 				"title": title,
 				"author": item_author_name,
-				"date": trim(to_string(meta["date"])),
+				"date": item_date_raw,
+				"date_display": item_date_display,
+				"date_sort_key": item_date["sort_key"],
+				"date_rfc822": item_date["rfc822"],
+				"date_iso": item_date["iso"],
 				"description": description,
 				"excerpt": excerpt,
 				"featured_image": featured_image,
@@ -2896,7 +3572,7 @@ func build_site(settings) {
 			})
 		}
 
-		listing_navigation := build_navigation(pages_data, custom_collections, listing_route)
+		listing_navigation := build_navigation(pages_data, custom_collections, listing_route, settings["blog_slug"])
 		listing_html := render_layout(
 			layout_template,
 			settings,
@@ -2913,7 +3589,9 @@ func build_site(settings) {
 		)
 		write_route_page(output_dir, listing_route, listing_html)
 		write_route_alias(output_dir, listing_route)
-		all_routes = push(all_routes, listing_route)
+		if want_sitemap {
+			append_file(sitemap_tmp, sitemap_url_entry(site_url, listing_route, "", blog_prefix))
+		}
 	}
 
 	total_posts := len(posts_sorted)
@@ -2933,7 +3611,7 @@ func build_site(settings) {
 			if featured_idx >= total_posts || featured_idx >= featured_posts_limit {
 				break
 			}
-			featured_post := posts_sorted[featured_idx]
+			featured_post := parse_post_record(posts_sorted[featured_idx])
 			featured_posts_cards = featured_posts_cards + listing_card_html(featured_post["route"], featured_post["title"], featured_post["excerpt"], featured_post["featured_image"], featured_post["tags"], "Read Article")
 			featured_idx := featured_idx + 1
 		}
@@ -2956,7 +3634,7 @@ func build_site(settings) {
 				if i >= end_idx {
 					break
 				}
-				post := posts_sorted[i]
+				post := parse_post_record(posts_sorted[i])
 				cards := cards + listing_card_html(post["route"], post["title"], post["excerpt"], post["featured_image"], post["tags"], "Read Article")
 				i := i + 1
 			}
@@ -2992,7 +3670,7 @@ func build_site(settings) {
 				index_route := "page/" + to_string(page_num) + "/"
 			}
 
-			index_navigation := build_navigation(pages_data, custom_collections, index_route)
+			index_navigation := build_navigation(pages_data, custom_collections, index_route, settings["blog_slug"])
 			index_html := render_layout(
 				layout_template,
 				settings,
@@ -3009,8 +3687,8 @@ func build_site(settings) {
 			)
 			write_route_page(output_dir, index_route, index_html)
 			write_route_alias(output_dir, index_route)
-			if page_num > 1 {
-				all_routes = push(all_routes, index_route)
+			if want_sitemap {
+				append_file(sitemap_tmp, sitemap_url_entry(site_url, index_route, "", blog_prefix))
 			}
 
 			if len(settings["blog_slug"]) > 0 {
@@ -3037,7 +3715,7 @@ func build_site(settings) {
 					})
 				}
 
-				blog_navigation := build_navigation(pages_data, custom_collections, blog_route)
+				blog_navigation := build_navigation(pages_data, custom_collections, blog_route, settings["blog_slug"])
 				blog_html := render_layout(
 					layout_template,
 					settings,
@@ -3054,7 +3732,9 @@ func build_site(settings) {
 				)
 				write_route_page(output_dir, blog_route, blog_html)
 				write_route_alias(output_dir, blog_route)
-				all_routes = push(all_routes, blog_route)
+				if want_sitemap {
+					append_file(sitemap_tmp, sitemap_url_entry(site_url, blog_route, "", blog_prefix))
+				}
 			}
 
 			page_num := page_num + 1
@@ -3066,107 +3746,54 @@ func build_site(settings) {
 			rss_items := ""
 			rss_limit := 20
 			rss_count := 0
-			route_lastmod := {}
 			rss_post_idx := 0
 			loop {
-				if rss_post_idx >= len(posts_sorted) {
+				if rss_post_idx >= len(posts_sorted) || rss_count >= rss_limit {
 					break
 				}
 
-				post := posts_sorted[rss_post_idx]
+				post := parse_post_record(posts_sorted[rss_post_idx])
 				rss_post_idx := rss_post_idx + 1
-				if rss_count >= rss_limit {
-					break
-				}
 				post_url := site_url + "/" + post["route"]
-				rss_items := rss_items + "<item><title>" + xml_escape(post["title"]) + "</title><link>" + xml_escape(post_url) + "</link><guid>" + xml_escape(post_url) + "</guid><description>" + xml_escape(post["excerpt"]) + "</description></item>"
-				route_lastmod[post["route"]] = trim(to_string(post["date"]))
+				rss_description := trim(regex_replace(regex_replace(to_string(post["excerpt"]), "<[^>]+>", " "), "\\s+", " "))
+				pub_date_tag := ""
+				post_rfc822 := trim(to_string(post["date_rfc822"]))
+				if len(post_rfc822) > 0 {
+					pub_date_tag = "<pubDate>" + post_rfc822 + "</pubDate>"
+				}
+				rss_items := rss_items + "<item><title>" + xml_escape(post["title"]) + "</title><link>" + xml_escape(post_url) + "</link><guid isPermaLink=\"true\">" + xml_escape(post_url) + "</guid>" + pub_date_tag + "<description>" + xml_escape(rss_description) + "</description></item>"
 				rss_count := rss_count + 1
 			}
-			rss_xml := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\"><channel><title>" + xml_escape(settings["site_title"]) + "</title><link>" + xml_escape(site_url) + "</link><description>Latest posts from " + xml_escape(settings["site_title"]) + "</description>" + rss_items + "</channel></rss>\n"
+			last_build_tag := ""
+			if len(newest_rfc822) > 0 {
+				last_build_tag = "<lastBuildDate>" + newest_rfc822 + "</lastBuildDate>"
+			}
+			rss_xml := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\"><channel><title>" + xml_escape(settings["site_title"]) + "</title><link>" + xml_escape(site_url) + "</link><description>Latest posts from " + xml_escape(settings["site_title"]) + "</description>" + last_build_tag + rss_items + "</channel></rss>\n"
 			ensure_dir(path_join(output_dir, "feed"))
 			write_file(path_join(output_dir, "feed/index.xml"), rss_xml)
 
-			sitemap_lines := [
-				"<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-				"<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd\">"
-			]
-			seen_routes := []
-			blog_prefix := ""
-			if len(settings["blog_slug"]) > 0 {
-				blog_prefix := settings["blog_slug"] + "/"
+			# Sitemap entries were streamed to a temp file during rendering. In
+			# finalize mode, also merge each posts shard's sitemap temp file.
+			sitemap_inner := ""
+			if path_exists(sitemap_tmp) {
+				sitemap_inner = read_file(sitemap_tmp)
 			}
-
-			route_idx := 0
-			loop {
-				if route_idx >= len(all_routes) {
-					break
-				}
-
-				route := all_routes[route_idx]
-				route_idx := route_idx + 1
-				already_seen := false
-				seen_route_idx := 0
+			if phase == "finalize" {
+				sm_shard_idx := 0
 				loop {
-					if seen_route_idx >= len(seen_routes) {
+					if sm_shard_idx >= shards {
 						break
 					}
-
-					seen_route := seen_routes[seen_route_idx]
-					seen_route_idx := seen_route_idx + 1
-					if seen_route == route {
-						already_seen = true
-						break
+					shard_sitemap := path_join(output_dir, ".kujo-sitemap-posts-" + to_string(sm_shard_idx) + ".tmp")
+					sm_shard_idx := sm_shard_idx + 1
+					if path_exists(shard_sitemap) {
+						sitemap_inner = sitemap_inner + read_file(shard_sitemap)
+						delete_file(shard_sitemap)
 					}
 				}
-				if already_seen {
-					continue
-				}
-				seen_routes = push(seen_routes, route)
-
-				url := site_url + "/"
-				if len(route) > 0 {
-					url := site_url + "/" + route
-				}
-
-				changefreq := "monthly"
-				priority := "0.7"
-				if len(route) == 0 {
-					changefreq := "weekly"
-					priority := "1.0"
-				} else if len(blog_prefix) > 0 && route == blog_prefix {
-					changefreq := "daily"
-					priority := "0.9"
-				} else if len(blog_prefix) > 0 && starts_with(route, blog_prefix + "page/") {
-					changefreq := "weekly"
-					priority := "0.6"
-				} else if len(blog_prefix) > 0 && starts_with(route, blog_prefix) {
-					changefreq := "monthly"
-					priority := "0.8"
-				} else if starts_with(route, "page/") {
-					changefreq := "weekly"
-					priority := "0.6"
-				}
-
-				sitemap_lines = push(sitemap_lines, "  <url>")
-				sitemap_lines = push(sitemap_lines, "    <loc>" + xml_escape(url) + "</loc>")
-
-				if has_key(route_lastmod, route) {
-					lastmod := trim(to_string(route_lastmod[route]))
-					if len(lastmod) >= 10 {
-						lastmod := substring(lastmod, 0, 10)
-					}
-					if len(lastmod) == 10 && substring(lastmod, 4, 5) == "-" && substring(lastmod, 7, 8) == "-" {
-						sitemap_lines = push(sitemap_lines, "    <lastmod>" + xml_escape(lastmod) + "</lastmod>")
-					}
-				}
-
-				sitemap_lines = push(sitemap_lines, "    <changefreq>" + changefreq + "</changefreq>")
-				sitemap_lines = push(sitemap_lines, "    <priority>" + priority + "</priority>")
-				sitemap_lines = push(sitemap_lines, "  </url>")
 			}
-			sitemap_lines = push(sitemap_lines, "</urlset>")
-			write_file(path_join(output_dir, "sitemap.xml"), join(sitemap_lines, "\n") + "\n")
+			sitemap_xml := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd\">\n" + sitemap_inner + "</urlset>\n"
+			write_file(path_join(output_dir, "sitemap.xml"), sitemap_xml)
 		} else {
 			print("Skipping RSS and sitemap (no --site-url configured)")
 		}
@@ -3180,26 +3807,21 @@ func build_site(settings) {
 		write_file(path_join(output_dir, "robots.txt"), robots)
 
 		if settings["llms"] == "public" && len(site_url) > 0 {
-			llms_lines := [
-				"# " + settings["site_title"],
-				"",
-				"This site contains structured content formatted for LLM-friendly consumption.",
-				"",
-				"## Posts"
-			]
+			# Streamed to the output file directly (O(1) appends) since string
+			# concatenation of a large body is O(n^2) in Kujo.
+			llms_path := path_join(output_dir, "llms.txt")
+			write_file(llms_path, "# " + settings["site_title"] + "\n\nThis site contains structured content formatted for LLM-friendly consumption.\n\n## Posts\n")
 			llms_post_idx := 0
 			loop {
 				if llms_post_idx >= len(posts_sorted) {
 					break
 				}
 
-				post := posts_sorted[llms_post_idx]
+				post := parse_post_record(posts_sorted[llms_post_idx])
 				llms_post_idx := llms_post_idx + 1
-				llms_lines = push(llms_lines, "- [" + post["title"] + "]("
-					+ site_url + "/" + post["route"] + ")")
+				append_file(llms_path, "- [" + post["title"] + "](" + site_url + "/" + post["route"] + ")\n")
 			}
-			llms_lines = push(llms_lines, "")
-			llms_lines = push(llms_lines, "## Pages")
+			append_file(llms_path, "\n## Pages\n")
 			built_page_idx := 0
 			loop {
 				if built_page_idx >= len(built_pages) {
@@ -3208,18 +3830,13 @@ func build_site(settings) {
 
 				page_data := built_pages[built_page_idx]
 				built_page_idx := built_page_idx + 1
-				llms_lines = push(llms_lines, "- [" + page_data["title"] + "]("
-					+ site_url + "/" + page_data["route"] + ")")
+				append_file(llms_path, "- [" + page_data["title"] + "](" + site_url + "/" + page_data["route"] + ")\n")
 			}
-			llms_lines = push(llms_lines, "")
-			llms_lines = push(llms_lines, "## Sitemap")
-			llms_lines = push(llms_lines, site_url + "/sitemap.xml")
-			llms_lines = push(llms_lines, "")
-			write_file(path_join(output_dir, "llms.txt"), join(llms_lines, "\n"))
+			append_file(llms_path, "\n## Sitemap\n" + site_url + "/sitemap.xml\n")
 		}
 	}
 
-	not_found_navigation := build_navigation(pages_data, custom_collections, "")
+	not_found_navigation := build_navigation(pages_data, custom_collections, "", settings["blog_slug"])
 	not_found_html := render_layout(
 		layout_template,
 		settings,
@@ -3235,6 +3852,35 @@ func build_site(settings) {
 		}
 	)
 	write_file(path_join(output_dir, "404.html"), not_found_html)
+
+	# Remove streaming temp files so they never appear in the published output.
+	if path_exists(sitemap_tmp) {
+		delete_file(sitemap_tmp)
+	}
+	if path_exists(records_tmp) {
+		delete_file(records_tmp)
+	}
+	if phase == "finalize" {
+		cleanup_shard_idx := 0
+		loop {
+			if cleanup_shard_idx >= shards {
+				break
+			}
+			leftover_records := path_join(output_dir, ".kujo-records-" + to_string(cleanup_shard_idx) + ".tmp")
+			leftover_sitemap := path_join(output_dir, ".kujo-sitemap-posts-" + to_string(cleanup_shard_idx) + ".tmp")
+			cleanup_shard_idx := cleanup_shard_idx + 1
+			if path_exists(leftover_records) {
+				delete_file(leftover_records)
+			}
+			if path_exists(leftover_sitemap) {
+				delete_file(leftover_sitemap)
+			}
+		}
+		post_manifest_cleanup := path_join(output_dir, ".kujo-post-manifest.txt")
+		if path_exists(post_manifest_cleanup) {
+			delete_file(post_manifest_cleanup)
+		}
+	}
 
 	if settings["minify"] {
 		minify_assets_recursive(path_join(output_dir, "assets"))

@@ -103,11 +103,21 @@ EOF
 	assert_file_contains output/about/index.html '<link rel="canonical" href="https://example.com/about/">'
 	assert_file_contains output/blog/welcome-to-kujo-ssg/index.html '<meta property="og:title" content="Welcome to Kujo SSG">'
 	assert_file_contains output/blog/welcome-to-kujo-ssg/index.html '<meta name="twitter:card" content="summary_large_image">'
+	assert_file_contains output/blog/welcome-to-kujo-ssg/index.html '<meta property="og:type" content="article">'
+	assert_file_contains output/blog/welcome-to-kujo-ssg/index.html '<meta property="article:published_time" content="2026-05-07">'
+	assert_file_contains output/blog/welcome-to-kujo-ssg/index.html '<span class="date">May 7, 2026</span>'
+	assert_file_contains output/blog/welcome-to-kujo-ssg/index.html '<script type="application/ld+json">'
+	assert_file_contains output/feed/index.xml '<pubDate>'
+	assert_file_contains output/feed/index.xml '<lastBuildDate>'
+	assert_file_contains output/storefronts/north-austin/index.html 'taxonomy-label">District'
+	assert_path_exists output/favicon.svg
 	assert_file_contains output/metadata-proof/index.html '<title>Metadata Proof Title | Kujo SSG Starter Site</title>'
 	assert_file_contains output/metadata-proof/index.html '<meta name="description" content="Metadata proof social description.">'
 	assert_file_contains output/metadata-proof/index.html '<link rel="canonical" href="https://docs.example.test/metadata-proof/">'
 	assert_file_contains output/metadata-proof/index.html '<meta property="og:url" content="https://docs.example.test/metadata-proof/">'
-	assert_file_contains output/metadata-proof/index.html '<meta name="twitter:image" content="../images/post-welcome-kujo-ssg-'
+	assert_file_contains output/metadata-proof/index.html '<meta name="twitter:image" content="https://example.com/images/post-welcome-kujo-ssg-'
+	assert_file_contains output/metadata-proof/index.html '<meta property="og:image" content="https://example.com/images/post-welcome-kujo-ssg-'
+	assert_file_contains output/metadata-proof/index.html '<meta property="og:site_name" content="Kujo SSG Starter Site">'
 	assert_path_missing output/draft-page
 	assert_path_missing output/draft-post
 	assert_file_contains output/llms.txt 'https://example.com/metadata-proof/'

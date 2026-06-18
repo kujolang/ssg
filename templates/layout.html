@@ -8,11 +8,16 @@
 	<meta name="keywords" content="{{seo_keywords}}">
 	<meta name="author" content="{{author_meta}}">
 	{{canonical_tag}}
+	{{favicon_tag}}
+	{{rss_link_tag}}
 	<meta property="og:title" content="{{seo_title}}">
 	<meta property="og:description" content="{{seo_description}}">
 	<meta property="og:url" content="{{og_url}}">
-	<meta property="og:type" content="website">
+	<meta property="og:type" content="{{og_type}}">
+	<meta property="og:site_name" content="{{site_title}}">
+	<meta property="og:locale" content="{{og_locale}}">
 	{{og_image_tag}}
+	{{og_article_tags}}
 	<meta name="twitter:card" content="summary_large_image">
 	<meta name="twitter:title" content="{{seo_title}}">
 	<meta name="twitter:description" content="{{seo_description}}">
@@ -20,6 +25,7 @@
 	<link href="{{relative_path}}assets/css/tailwind.min.css" rel="stylesheet">
 	<link href="{{relative_path}}assets/css/fonts.css" rel="stylesheet">
 	<link href="{{stylesheet_path}}" rel="stylesheet">
+	{{json_ld}}
 </head>
 <body class="bg-background text-primary font-body-light">
 

@@ -12,10 +12,12 @@ It fits the Clarity / Context / Control story by keeping content models, routes,
 
 ## Highlights
 
-- Builds Markdown pages, blog posts, and custom content collections
-- Renders SEO metadata from frontmatter, including canonical, Open Graph, and Twitter tags
+- Builds Markdown pages, blog posts, and custom content collections (with per-type taxonomies)
+- Renders full SEO metadata from frontmatter: canonical, Open Graph, Twitter Card, JSON-LD, absolute social images, and `article:*` tags
+- Parses and formats dates, with RFC-822 RSS `pubDate`/`lastBuildDate` and sitemap `lastmod`
 - Generates paginated home/blog listings with configurable sort order
-- Produces `sitemap.xml`, `robots.txt`, `feed/index.xml`, `llms.txt`, and `404.html`
+- Produces `sitemap.xml`, `robots.txt`, `feed/index.xml`, `llms.txt`, `404.html`, and `favicon.svg`
+- Downloads and self-hosts any Google Font as cached `woff2`, with an offline bundled fallback
 - Supports local and remote featured-image processing with deterministic output names
 - Validates CLI behavior, config precedence, generated output, and release-gate checks with dedicated project scripts
 - Ships with starter content, templates, assets, and lookup files for a real first-run build
@@ -67,6 +69,25 @@ Preview the generated site locally on `127.0.0.1`:
 ```bash
 kujo serve output --port 8080
 ```
+
+### Parallel builds for large sites
+
+For large sites, render post shards across CPU cores with the parallel
+orchestrator (mirrors how multiprocessing SSGs scale). Output is byte-identical
+to the single-process build (sitemap URL order aside):
+
+```bash
+# bash scripts/build-parallel.sh <shards> <concurrency> [build args...]
+KUJO_BIN=/path/to/kujo bash scripts/build-parallel.sh 40 8 \
+  --content content --output output --site-url https://example.com --posts-per-page 25
+```
+
+Use many small shards (~200–300 posts each) and a concurrency near your core
+count. Internally this drives `build.kujo`'s `--phase setup|posts|finalize` and
+`--shard i --shards N` flags; the default `kujo run ./build.kujo` remains a normal
+single-process build. (The per-page render cost is interpreter-bound, so the
+speedup is real but memory-bandwidth-limited — see
+[docs/performance-findings.md](docs/performance-findings.md).)
 
 Scaffold a starter config file when bootstrapping a new project:
 
@@ -177,7 +198,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--assets <dir>`: assets directory
 - `--posts-per-page <n>`: listing pagination size
 - `--sort-by <date|title|author|order>`: blog listing sort mode
-- `--fonts <comma,list>`: local font generation configuration
+- `--fonts <comma,list>`: heading/body font families (first = headings, second = body). Bundled families (`Bree Serif`, `Inter`, `Quicksand`, `Open Sans`) render offline; any other family is downloaded from Google Fonts as `woff2` and cached under `.cache/fonts/`. See [Fonts](#fonts).
 - `--site-title <text>`
 - `--site-tagline <text>`
 - `--site-url <url>`
@@ -302,6 +323,53 @@ For most teams, the fastest path to a working site is:
 
 For deterministic CI and release builds, leave remote downloads disabled unless the build explicitly needs mirrored remote assets.
 
+## Fonts
+
+`--fonts "Headings,Body"` (or `fonts:` in config) selects the heading and body
+type families. There are two provisioning paths:
+
+- **Bundled families** — `Bree Serif`, `Inter`, `Quicksand`, `Open Sans` ship as
+  local `woff2` and render fully offline with zero network access. These are the
+  defaults (`Bree Serif` headings, `Inter` body), so a stock build is always
+  deterministic and offline.
+- **Any Google Font** — request any family by name (e.g. `--fonts "Roboto,Lato"`)
+  and Kujo SSG fetches the `latin` `woff2` files for weights 400/700 directly
+  from Google Fonts, writes them to `output/assets/fonts/`, generates the
+  matching `@font-face` rules in `output/assets/css/fonts.css`, and caches the
+  downloads under `.cache/fonts/` (git-ignored). Subsequent builds reuse the
+  cache and stay offline.
+
+If a requested Google Font cannot be provisioned (no network, or an unknown
+family name), the build prints a warning and falls back to the bundled default
+without failing — so CI never breaks on a font typo.
+
+This keeps the project decentralized: you are never locked into a small curated
+font list, but the default path remains fully self-contained.
+
+## SEO And Social Metadata
+
+Every generated page includes, derived from frontmatter and config:
+
+- `<title>`, `description`, `keywords`, `author`, and `lang`
+- Canonical URL (explicit `canonical:` or computed from `site_url` + route)
+- Open Graph: `og:title`, `og:description`, `og:url`, `og:type`
+  (`article` for posts/items, `website` otherwise), `og:site_name`, `og:locale`,
+  and an **absolute** `og:image`
+- Twitter Card: `summary_large_image` with title, description, and an
+  **absolute** `twitter:image`
+- `article:published_time` / `article:author` for posts and collection items
+- JSON-LD structured data (`BlogPosting` for articles, `WebSite` otherwise)
+- An SVG favicon (`/favicon.svg`) and RSS autodiscovery `<link>`
+
+Social image URLs are emitted as absolute URLs (using `site_url`) so link
+unfurlers on Facebook, X/Twitter, LinkedIn, and Slack resolve them correctly.
+
+Post and collection-item `date:` frontmatter is parsed (ISO `YYYY-MM-DD`,
+`YYYY/MM/DD`, `MM/DD/YYYY`, `Month DD, YYYY`, and `DD Month YYYY` are all
+accepted), rendered for display as `Month DD, YYYY`, used for stable date
+sorting, and emitted as RFC-822 `pubDate`/`lastBuildDate` in the RSS feed and
+`YYYY-MM-DD` `lastmod` in the sitemap.
+
 ## Template Overrides
 
 Built-in override points include:
@@ -333,8 +401,13 @@ Primary outputs include:
 - `output/robots.txt`
 - `output/llms.txt`
 - `output/404.html`
+- `output/favicon.svg`
 
-`sitemap.xml` uses the sitemaps.org schema with absolute URLs. Generated HTML includes canonical, Open Graph, Twitter, and standard metadata derived from frontmatter and config.
+`sitemap.xml` uses the sitemaps.org schema with absolute URLs, per-route
+`changefreq`/`priority`, and `lastmod` from post dates. The RSS feed carries
+`pubDate`/`lastBuildDate`. Generated HTML includes canonical, Open Graph,
+Twitter Card, JSON-LD, and standard metadata derived from frontmatter and config
+(see [SEO And Social Metadata](#seo-and-social-metadata)).
 
 ## Troubleshooting
 
