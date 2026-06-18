@@ -3,3 +3,15 @@ output_*/
 .kujo-ssg-cache
 generate_posts.py
 tmp/
+# Google Fonts download cache
+.cache/
+
+# Benchmark scratch (regenerate with scripts/generate-benchmark-content.py)
+bench*/
+bench*-content/
+bench*-output/
+bN*/
+bs*/
+out[0-9]*/
+fo[0-9]*/
+logs/
