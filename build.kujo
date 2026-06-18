@@ -49,7 +49,8 @@ func print_help() {
 		"",
 		"Benchmark compatibility options:",
 		"  --no-index                    Skip index/blog listing pages",
-		"  --no-aux                      Skip feed/sitemap/robots/llms generation"
+		"  --no-aux                      Skip feed/sitemap/robots/llms generation",
+		"  --no-aliases                  Skip flat .html redirect aliases (clean URLs only)"
 	])
 }
 
@@ -73,6 +74,7 @@ func default_settings() {
 		"blog_slug": "blog",
 		"no_index": false,
 		"no_aux": false,
+		"no_aliases": false,
 		"phase": "full",
 		"shard": 0,
 		"shards": 1
@@ -1641,7 +1643,10 @@ func write_route_page(output_dir, route, html) {
 	write_file(path_join(full_dir, "index.html"), html)
 }
 
-func write_route_alias(output_dir, route) {
+func write_route_alias(output_dir, route, enabled) {
+	if !enabled {
+		return null
+	}
 	clean_route := normalize_route(route)
 	if len(clean_route) == 0 {
 		return null
@@ -2600,6 +2605,11 @@ func apply_cli_overrides(settings, cli_args) {
 			i := i + 1
 			continue
 		}
+		if token == "--no-aliases" {
+			settings["no_aliases"] = true
+			i := i + 1
+			continue
+		}
 
 		value_flags := [
 			{"flag": "--output", "key": "output"},
@@ -2726,7 +2736,8 @@ func normalize_settings(settings) {
 		{"key": "minify", "fallback": false},
 		{"key": "download_remote_images", "fallback": false},
 		{"key": "no_index", "fallback": false},
-		{"key": "no_aux", "fallback": false}
+		{"key": "no_aux", "fallback": false},
+		{"key": "no_aliases", "fallback": false}
 	]
 	bool_index := 0
 	loop {
@@ -3075,6 +3086,10 @@ func build_site(settings) {
 		blog_prefix := settings["blog_slug"] + "/"
 	}
 	want_sitemap := !settings["no_aux"] && len(site_url) > 0
+	# Flat .html redirect aliases are an extra (the reference SSG emits only clean
+	# dir/index.html). On large sites they double per-page write I/O, so they can be
+	# turned off with --no-aliases; default keeps them for clean-URL convenience.
+	make_aliases := !settings["no_aliases"]
 	# Large accumulators are streamed to temp files: both array push and string
 	# concatenation are O(n^2) in Kujo, but file append is O(1). In sharded mode
 	# each posts worker writes its own records/sitemap temp files, which the
@@ -3144,7 +3159,7 @@ func build_site(settings) {
 			}
 		)
 		write_route_page(output_dir, page_data["route"], page_html)
-		write_route_alias(output_dir, page_data["route"])
+		write_route_alias(output_dir, page_data["route"], make_aliases)
 		if want_sitemap {
 			page_lastmod := parse_post_date(page_data["date"])
 			append_file(sitemap_tmp, sitemap_url_entry(site_url, page_data["route"], page_lastmod["iso"], blog_prefix))
@@ -3288,7 +3303,7 @@ func build_site(settings) {
 			}
 		)
 		write_route_page(output_dir, route, post_html)
-		write_route_alias(output_dir, route)
+		write_route_alias(output_dir, route, make_aliases)
 
 		if want_sitemap {
 			append_file(sitemap_tmp, sitemap_url_entry(site_url, route, post_date["iso"], blog_prefix))
@@ -3504,7 +3519,7 @@ func build_site(settings) {
 				}
 			)
 			write_route_page(output_dir, route, item_html)
-			write_route_alias(output_dir, route)
+			write_route_alias(output_dir, route, make_aliases)
 
 			if want_sitemap {
 				append_file(sitemap_tmp, sitemap_url_entry(site_url, route, item_date["iso"], blog_prefix))
@@ -3594,7 +3609,7 @@ func build_site(settings) {
 			}
 		)
 		write_route_page(output_dir, listing_route, listing_html)
-		write_route_alias(output_dir, listing_route)
+		write_route_alias(output_dir, listing_route, make_aliases)
 		if want_sitemap {
 			append_file(sitemap_tmp, sitemap_url_entry(site_url, listing_route, "", blog_prefix))
 		}
@@ -3692,7 +3707,7 @@ func build_site(settings) {
 				}
 			)
 			write_route_page(output_dir, index_route, index_html)
-			write_route_alias(output_dir, index_route)
+			write_route_alias(output_dir, index_route, make_aliases)
 			if want_sitemap {
 				append_file(sitemap_tmp, sitemap_url_entry(site_url, index_route, "", blog_prefix))
 			}
@@ -3737,7 +3752,7 @@ func build_site(settings) {
 					}
 				)
 				write_route_page(output_dir, blog_route, blog_html)
-				write_route_alias(output_dir, blog_route)
+				write_route_alias(output_dir, blog_route, make_aliases)
 				if want_sitemap {
 					append_file(sitemap_tmp, sitemap_url_entry(site_url, blog_route, "", blog_prefix))
 				}

@@ -211,6 +211,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--init <yml|yaml|json>`: scaffold starter config
 - `--no-index`: skip index and blog listing pages
 - `--no-aux`: skip feed, sitemap, robots, and llms outputs
+- `--no-aliases`: skip flat `.html` redirect aliases (emit clean `dir/index.html` only); halves per-page write I/O on large sites
 - `--version`
 - `--help`
 
