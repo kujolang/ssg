@@ -91,6 +91,25 @@ parallelism, and beating a C-extension SSG at 10k from a bytecode VM is unlikely
   serial and now dominate. Even with a perfect render phase, that serial tail keeps
   Kujo well above the reference SSG's 16.7 s.
 
+## Shard-count sweep (4,000 posts, near-idle, load ~2.8)
+
+| Shards (N/shard) | setup | render (parallel) | finalize (serial) | total |
+|---|---|---|---|---|
+| 8 (500) | 5.3s | 51.6s | 22.3s | 79.3s |
+| 16 (250) | 3.7s | 39.3s | 21.4s | 64.5s |
+| 40 (100) | 5.7s | **32.9s** | 20.4s | **59.0s** |
+
+- **Finer sharding helps the render phase** (per-shard super-linearity is real and
+  partly fixable: 51.6→32.9s going 8→40 shards).
+- **The finalize phase is a serial floor** (~20s, unchanged by sharding) — single
+  process; it's the biggest remaining *fixable* lever (parallelize it).
+- **But even near-idle + optimal sharding, 4k = 59s vs the reference SSG's ~7s (~8×).**
+  The render phase alone (33s) is ~5× the reference's whole pipeline. That is the
+  fundamental bytecode-VM-vs-C per-page gap, and it does not close with configuration.
+  Realistic 10k floor is **~8–10×**, so beating the reference SSG at 10k is not
+  achievable for a Kujo-language SSG — the earlier "13.5×" was config+load inflated,
+  but the honest floor still loses decisively at scale.
+
 ## Where the parallel 10k time goes (measured, 4,000-post proxy)
 
 Per-phase timing from `scripts/build-parallel.sh` (16 shards / 12 cores, 4,000 posts):
