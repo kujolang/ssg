@@ -2126,6 +2126,11 @@ func listing_card_tags_html(terms) {
 }
 
 func listing_card_html(route, title, excerpt, featured_image, terms, action_label) {
+	# Delegates to the native renderer (byte-identical to listing_card_html_interpreted).
+	return render_listing_card(route, title, excerpt, featured_image, terms, action_label)
+}
+
+func listing_card_html_interpreted(route, title, excerpt, featured_image, terms, action_label) {
 	safe_href := xml_escape(route_to_path(route))
 	safe_title := html_escape(title)
 	safe_excerpt := html_escape(excerpt)
