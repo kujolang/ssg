@@ -10,21 +10,21 @@ spikes are factored out (single runs on this machine swing 2×+). Native render 
 (`escape_xml`/`render_markdown`/`render_layout`/`render_listing_card`) + parallel build
 + `--no-aliases`:
 
-| Site size | Reference SSG | Kujo SSG | Winner |
+| Site size | Reference SSG | Kujo SSG | Ratio |
 |---|---|---|---|
-| 200 posts | 3.95 s | **2.66 s** | **Kujo — 1.5× faster** |
-| 500 posts | 2.93 s | 2.99 s | **tie (1.02×)** |
-| 1,000 posts | 4.61 s | 10.3 s | Reference 2.2× |
-| 2,000 posts | 7.22 s | 21.3 s | Reference 2.9× |
+| 200 pages | 3.95 s | **2.66 s** | **Kujo 1.5× faster** |
+| 500 pages | 3.05 s | 3.30 s | **~tie (1.08×)** |
+| 2,000 pages | 4.67 s | 17.3 s | Reference 3.7× |
+| **10,000 pages** | **14.1 s** | **190 s** | **Reference 13.5×** |
 
-**Kujo SSG beats or ties the reference SSG up to ~500 pages — the size of the large
-majority of real sites — and loses only at large scale.** The crossover is ~500 pages:
+**Kujo SSG ties the reference SSG around ~500 pages and then falls behind
+*super-linearly*: 3.7× at 2k, 13.5× at 10k.** The crossover is ~500 pages:
 Kujo's native binary starts instantly while the reference SSG pays a fixed Python
 import cost (`jinja2`, `markdown`, `Pillow`, `requests`), so Kujo wins when the page
 count is small; the reference SSG's C-extension per-page speed + multiprocessing wins
 once that startup is amortized.
 
-For the original 10k target the reference SSG still wins (~6× at that scale): closing it
+For the original 10k target the reference SSG wins decisively (~13.5× at that scale, measured): closing it
 fully would require native frontmatter parsing + finalize parallelism, and even then a
 bytecode-interpreted renderer is unlikely to beat C extensions at 10k. But "beat the
 reference SSG's speed" is **true for typical site sizes**, measured cleanly.
@@ -55,7 +55,7 @@ loses at large scale.** The drivers:
    compute is no longer the bottleneck — frontmatter parsing and file I/O are.
 3. **The reference SSG wins at scale** because its per-page work is C (mistune/markdown,
    compiled Jinja2) and it uses multiprocessing; past the startup crossover, lower
-   per-page cost compounds. At 10k it is ~6× faster.
+   per-page cost compounds super-linearly. At 10k the reference SSG is ~13.5× faster (measured: 14.1 s vs 190 s).
 
 So the honest position: **feature parity is fully met and exceeded, and Kujo SSG is
 faster than the reference SSG for the common case (small/medium sites).** It does not
