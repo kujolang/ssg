@@ -10,15 +10,19 @@
 # regime; a bounded concurrency (≈ CPU cores) avoids oversubscription.
 #
 # Usage:
-#   bash scripts/build-parallel.sh <shards> <concurrency> [build args...]
+#   bash scripts/build-parallel.sh <shards|auto> <concurrency|auto> [build args...]
 #
-# Example (12-core machine, 10k posts → ~40 shards of ~250):
-#   KUJO_BIN=/path/to/kujo bash scripts/build-parallel.sh 40 12 \
+# `auto` picks a near-optimal shard count (~120 posts/shard — measured to keep each
+# worker in the fast, low-super-linearity regime) and concurrency = CPU cores.
+#
+# Examples:
+#   KUJO_BIN=/path/to/kujo bash scripts/build-parallel.sh auto auto \
 #       --content content --output output --site-url https://example.com --posts-per-page 25
+#   bash scripts/build-parallel.sh 40 12 --content content --output output ...
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
-    echo "Usage: bash scripts/build-parallel.sh <shards> <concurrency> [build args...]" >&2
+    echo "Usage: bash scripts/build-parallel.sh <shards|auto> <concurrency|auto> [build args...]" >&2
     exit 2
 fi
 
@@ -27,9 +31,32 @@ CONCURRENCY="$1"; shift
 KUJO="${KUJO_BIN:-kujo}"
 BUILD="./build.kujo"
 
+# Resolve --content from the build args (default "content") to count posts for auto-sizing.
+CONTENT="content"
+prev=""
+for a in "$@"; do
+    [ "$prev" = "--content" ] && CONTENT="$a"
+    prev="$a"
+done
+
+CORES="$( (sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 8) )"
+
+if [ "$CONCURRENCY" = "auto" ]; then
+    CONCURRENCY="$CORES"
+fi
+
+if [ "$SHARDS" = "auto" ]; then
+    POSTS="$(ls "$CONTENT"/posts/*.md 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$POSTS" -lt 1 ] && POSTS=1
+    # ~120 posts/shard, but never fewer than the core count (so all cores stay busy)
+    SHARDS=$(( (POSTS + 119) / 120 ))
+    [ "$SHARDS" -lt "$CORES" ] && SHARDS="$CORES"
+    echo "auto: $POSTS posts -> $SHARDS shards, $CONCURRENCY concurrent"
+fi
+
 for n in "$SHARDS" "$CONCURRENCY"; do
     if ! [[ "$n" =~ ^[0-9]+$ ]] || [ "$n" -lt 1 ]; then
-        echo "shards and concurrency must be positive integers" >&2
+        echo "shards and concurrency must be positive integers (or 'auto')" >&2
         exit 2
     fi
 done

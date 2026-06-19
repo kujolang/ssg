@@ -77,12 +77,13 @@ orchestrator (mirrors how multiprocessing SSGs scale). Output is byte-identical
 to the single-process build (sitemap URL order aside):
 
 ```bash
-# bash scripts/build-parallel.sh <shards> <concurrency> [build args...]
-KUJO_BIN=/path/to/kujo bash scripts/build-parallel.sh 40 8 \
+# bash scripts/build-parallel.sh <shards|auto> <concurrency|auto> [build args...]
+# `auto` sizes shards (~120 posts each) and concurrency (= CPU cores) for you:
+KUJO_BIN=/path/to/kujo bash scripts/build-parallel.sh auto auto \
   --content content --output output --site-url https://example.com --posts-per-page 25
 ```
 
-Use many small shards (~200–300 posts each) and a concurrency near your core
+Use many small shards (~120–300 posts each) and a concurrency near your core
 count. Internally this drives `build.kujo`'s `--phase setup|posts|finalize` and
 `--shard i --shards N` flags; the default `kujo run ./build.kujo` remains a normal
 single-process build. (The per-page render cost is interpreter-bound, so the
