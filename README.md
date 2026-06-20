@@ -4,10 +4,6 @@ Local static-site generation showcase for Kujo projects, built around a single e
 
 `SSG` is designed for teams that want deterministic builds, straightforward template overrides, and a transparent content pipeline. Content, templates, assets, metadata, feeds, and validation stay visible in the repository instead of disappearing behind framework abstractions.
 
-Prioritize copyable examples over tests: examples should model the most token-efficient idioms we want agents to imitate.
-
-Exclude generated/bulk paths from the main sweep unless the task explicitly targets them; document the search exclusions you used.
-
 It fits the Clarity / Context / Control story by keeping content models, routes, feeds, and validation predictable, surfacing generated artifacts and metadata as context, and making builds and release checks local and reviewable.
 
 ## Highlights
@@ -48,6 +44,30 @@ It fits the Clarity / Context / Control story by keeping content models, routes,
 ## Requirements
 
 - Kujo CLI available on your `PATH`, or a local Kujo binary path exposed through `KUJO_BIN`
+
+## Runtime Capabilities
+
+Kujo gates host effects (filesystem, network, processes) behind explicit runtime
+capabilities. The default `kujo run ./build.kujo` runs in **trusted mode**, where
+every capability — including outbound network for font and remote-image downloads
+— is granted. No extra flags are needed for normal builds.
+
+If you build in hardened **`--untrusted`** mode, capabilities are denied by
+default and you opt in per effect. A full build needs at least:
+
+```bash
+kujo run --untrusted \
+  --allow-fs-read --allow-fs-write --allow-fs-delete \
+  --allow-clock --allow-net-client \
+  ./build.kujo -- --site-url https://example.com --fonts "Roboto,Lato"
+```
+
+(`--allow-net-client` is only needed when the build downloads Google Fonts or
+remote images; `--allow-fs-*` and `--allow-clock` are needed for every build.)
+
+Note: passing any single `--allow-*` flag switches the runtime out of trusted
+mode, so you must then enumerate every capability the build uses (filesystem
+included). For most users the default trusted path is the right choice.
 
 ## Quick Start
 
@@ -147,13 +167,13 @@ Core directories in a standard project:
 
 `build.kujo` loads config from the first file found in this order:
 
-1. `SSG.yml`
-2. `SSG.yaml`
-3. `SSG.json`
+1. `kujo-ssg.yml`
+2. `kujo-ssg.yaml`
+3. `kujo-ssg.json`
 
 CLI flags always override config values.
 
-Example `SSG.yml`:
+Example `kujo-ssg.yml`:
 
 ```yaml
 site_url: https://example.com
@@ -207,7 +227,8 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--llms <public|private>`
 - `--watch`: reserved, currently not implemented
 - `--minify`: emit minified CSS/JS assets
-- `--download-remote-images`: mirror remote `featured_image` URLs into output
+- `--download-remote-images`: mirror remote `featured_image` URLs into output (needs outbound network — see [Runtime Capabilities](#runtime-capabilities))
+- `--drafts`: include `draft: true` content in the build (preview/staging workflow); omitted by default
 - `--blog-slug <slug>`: blog route base
 - `--init <yml|yaml|json>`: scaffold starter config
 - `--no-index`: skip index and blog listing pages
@@ -252,7 +273,9 @@ Frontmatter keys supported across pages, posts, and custom types:
 - `categories`
 - `taxonomies`
 
-`draft: true` excludes content from generated public outputs.
+`draft: true` excludes content from generated public outputs. Pass `--drafts` to
+include draft content in a build for preview/staging without publishing it by
+default.
 
 ## Taxonomies And Lookups
 
@@ -302,7 +325,7 @@ The repository starter content is meant to be immediately useful, not empty.
 
 Recommended first customization points:
 
-- `SSG.yml`
+- `kujo-ssg.yml`
 - `templates/`
 - `content/`
 
@@ -341,9 +364,16 @@ type families. There are two provisioning paths:
   downloads under `.cache/fonts/` (git-ignored). Subsequent builds reuse the
   cache and stay offline.
 
-If a requested Google Font cannot be provisioned (no network, or an unknown
-family name), the build prints a warning and falls back to the bundled default
-without failing — so CI never breaks on a font typo.
+Google Font downloads need outbound network access. The default
+`kujo run ./build.kujo` path runs in trusted mode (all runtime capabilities
+granted), so downloads work with no extra flags. Only if you run the build in
+hardened `--untrusted` mode do you need to opt in — see
+[Runtime Capabilities](#runtime-capabilities).
+
+If a requested Google Font cannot be provisioned (no network, missing capability
+in `--untrusted` mode, or an unknown family name), the build prints a warning and
+falls back to the bundled default without failing — so CI never breaks on a font
+typo.
 
 This keeps the project decentralized: you are never locked into a small curated
 font list, but the default path remains fully self-contained.
