@@ -20,7 +20,8 @@ stop_remote_server() {
 cleanup_temp_site_state() {
 	stop_remote_server
 	rm -f kujo-ssg.yml kujo-ssg.yaml kujo-ssg.json
-	rm -rf output output-yml output-yaml output-json output-yml-preferred output-yaml-preferred output-json-fallback output-cli output-cli-fields output-private output-suppressed content-cli templates-cli assets-cli remote-assets
+	rm -rf output output-yml output-yaml output-json output-yml-preferred output-yaml-preferred output-json-fallback output-cli output-cli-fields output-private output-suppressed output-no-drafts output-with-drafts content-cli templates-cli assets-cli remote-assets
+	rm -rf "${ABS_OUTPUT_DIR:-/nonexistent-abs-output-guard}"
 }
 
 write_yaml_config() {
@@ -158,7 +159,7 @@ main() {
 	assert_output_contains "Usage: kujo run ./build.kujo [options]"
 
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --version
-	assert_output_contains "build.kujo 1.1.0"
+	assert_output_contains "build.kujo 1.2.0"
 
 	setup_temp_site "$REPO_ROOT" "$temp_dir"
 	pushd "$temp_dir" >/dev/null
@@ -362,6 +363,47 @@ EOF
 	assert_path_missing output-suppressed/llms.txt
 	assert_path_missing output-suppressed/sitemap.xml
 	assert_path_missing output-suppressed/feed/index.xml
+
+	# Draft preview: drafts are excluded by default and included with --drafts.
+	cleanup_temp_site_state
+	cp "$REPO_ROOT/kujo-ssg.yml" "$temp_dir/kujo-ssg.yml"
+	cat > content/posts/draft-preview-proof.md <<'EOF'
+---
+title: Draft Preview Proof
+custom_url: draft-preview-proof
+author: 1
+date: 2026-06-01
+description: Hidden unless drafts are enabled.
+draft: true
+---
+
+# Draft Body Marker DRAFTXYZZY
+EOF
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output output-no-drafts --site-url https://example.com
+	assert_output_contains "Build complete"
+	assert_path_missing output-no-drafts/blog/draft-preview-proof/index.html
+	assert_file_not_contains output-no-drafts/sitemap.xml 'draft-preview-proof'
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output output-with-drafts --drafts --site-url https://example.com
+	assert_output_contains "Build complete"
+	assert_path_exists output-with-drafts/blog/draft-preview-proof/index.html
+	assert_file_contains output-with-drafts/blog/draft-preview-proof/index.html 'DRAFTXYZZY'
+	rm -f content/posts/draft-preview-proof.md
+
+	# Absolute --output paths must build from the filesystem root, not be
+	# silently rewritten relative to the working directory.
+	cleanup_temp_site_state
+	cp "$REPO_ROOT/kujo-ssg.yml" "$temp_dir/kujo-ssg.yml"
+	ABS_OUTPUT_DIR="$(mktemp -d)/abs-output"
+	# Top-level segment of the absolute path (e.g. "var" or "tmp"); the old bug
+	# created this as a stray relative directory under the working directory.
+	abs_top_segment="${ABS_OUTPUT_DIR#/}"
+	abs_top_segment="${abs_top_segment%%/*}"
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output "$ABS_OUTPUT_DIR" --site-url https://example.com
+	assert_output_contains "Build complete"
+	assert_path_exists "$ABS_OUTPUT_DIR/index.html"
+	assert_path_missing "$abs_top_segment"
+	rm -rf "$ABS_OUTPUT_DIR"
+	unset ABS_OUTPUT_DIR
 
 	cleanup_temp_site_state
 	cp "$REPO_ROOT/kujo-ssg.yml" "$temp_dir/kujo-ssg.yml"

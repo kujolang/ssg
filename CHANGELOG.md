@@ -1,1 +1,21 @@
 # Changelog
+
+## 1.2.0
+
+### Added
+- `--drafts` flag (and `drafts:` config key) to include `draft: true` content in a
+  build for preview/staging workflows. Drafts remain excluded by default.
+
+### Fixed
+- Absolute `--output` (and other directory) paths are now built from the
+  filesystem root instead of being silently rewritten relative to the working
+  directory (`ensure_dir` preserved-root fix).
+- `.DS_Store` / `Thumbs.db` OS junk files are no longer copied into the generated
+  site by `copy_tree`.
+- Google Font download warning no longer gives misleading capability advice; it
+  now reflects that the default build runs in trusted mode with network access.
+
+### Documentation
+- Corrected the config-file precedence in `README.md` (`kujo-ssg.yml/.yaml/.json`,
+  not `SSG.*`) and removed agent-guide text that had leaked into the README.
+- Documented the Kujo runtime capability model and the `--untrusted` invocation.

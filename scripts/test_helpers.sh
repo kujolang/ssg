@@ -57,6 +57,16 @@ assert_file_contains() {
 	fi
 }
 
+assert_file_not_contains() {
+	local target_path="$1"
+	local needle="$2"
+	if grep -Fq "$needle" "$target_path"; then
+		echo "FAIL expected file to NOT contain: $needle"
+		echo "FILE: $target_path"
+		exit 1
+	fi
+}
+
 setup_temp_site() {
 	local repo_root="$1"
 	local site_dir="$2"
