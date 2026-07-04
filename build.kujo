@@ -1956,7 +1956,9 @@ func resolve_font_family(requested, default_family, settings, output_fonts_dir, 
 		return {"family": family, "fallback": "sans-serif", "lines": result["lines"]}
 	}
 
-	print("Warning: could not provision Google Font '" + family + "' (" + result["error"] + "); falling back to '" + default_family + "'. Font downloads need outbound network access (granted by default; in --untrusted mode add --allow-net-client).")
+	warning := "Warning: could not provision Google Font '" + family + "' (" + result["error"] + "); falling back to '" + default_family + "'."
+	warning = warning + " Font downloads need outbound network access (granted by default; in --untrusted mode add --allow-net-client)."
+	print(warning)
 	default_key := to_lower(default_family)
 	return {"family": default_family, "fallback": font_generic_fallback(default_key), "lines": bundled_font_face_lines(default_family, default_key)}
 }
