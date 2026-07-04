@@ -1,5 +1,9 @@
 # SSG
 
+[![Version](https://img.shields.io/badge/version-1.0.0-black)](https://github.com/kujolang/ssg)
+[![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+[![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
+
 Local static-site generation showcase for Kujo projects, built around a single entrypoint: [build.kujo](build.kujo).
 
 `SSG` is designed for teams that want deterministic builds, straightforward template overrides, and a transparent content pipeline. Content, templates, assets, metadata, feeds, and validation stay visible in the repository instead of disappearing behind framework abstractions.
