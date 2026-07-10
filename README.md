@@ -190,6 +190,7 @@ templates: templates
 assets: assets
 
 blog_slug: blog
+posts_at_root: false
 posts_per_page: 5
 sort_by: date
 
@@ -234,6 +235,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--download-remote-images`: mirror remote `featured_image` URLs into output (needs outbound network — see [Runtime Capabilities](#runtime-capabilities))
 - `--drafts`: include `draft: true` content in the build (preview/staging workflow); omitted by default
 - `--blog-slug <slug>`: blog route base
+- `--posts-at-root`: keep post permalinks at `/<slug>/` while retaining the blog listing under `/<blog_slug>/`
 - `--init <yml|yaml|json>`: scaffold starter config
 - `--no-index`: skip index and blog listing pages
 - `--no-aux`: skip feed, sitemap, robots, and llms outputs
@@ -252,7 +254,7 @@ Unknown flags, missing option values, malformed YAML/JSON config, invalid boolea
 Routes are generated like this:
 
 - Pages: `/<slug>/`
-- Posts: `/<blog_slug>/<slug>/`
+- Posts: `/<blog_slug>/<slug>/` by default, or `/<slug>/` with `posts_at_root: true`
 - Custom collections: `/<type>/<slug>/`
 - Collection listing pages: `/<type>/`
 

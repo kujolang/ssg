@@ -143,6 +143,13 @@ EOF
 	assert_path_missing output/page/2/index.html
 	assert_path_missing output/blog/page/2/index.html
 
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --site-url https://example.com --posts-at-root
+	assert_output_contains "Build complete"
+	assert_path_exists output/welcome-to-kujo-ssg/index.html
+	assert_path_exists output/blog/index.html
+	assert_path_missing output/blog/welcome-to-kujo-ssg/index.html
+	assert_file_contains output/llms.txt 'https://example.com/welcome-to-kujo-ssg/'
+
 	cp -R content content-sort-date
 	rm -rf content-sort-date/posts
 	mkdir -p content-sort-date/posts

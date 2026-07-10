@@ -44,6 +44,7 @@ func print_help() {
 		"  --download-remote-images      Download remote featured images",
 		"  --drafts                      Include draft content (preview builds)",
 		"  --blog-slug <slug>            Blog root slug (default: blog)",
+		"  --posts-at-root               Keep post permalinks at /<slug>/",
 		"  --init <yml|yaml|json>        Bootstrap starter project",
 		"  --version                     Print version and exit",
 		"  --help                        Show this help and exit",
@@ -74,6 +75,7 @@ func default_settings() {
 		"download_remote_images": false,
 		"drafts": false,
 		"blog_slug": "blog",
+		"posts_at_root": false,
 		"no_index": false,
 		"no_aux": false,
 		"no_aliases": false,
@@ -2454,6 +2456,7 @@ func create_sample_config(format_name) {
 		"templates": "templates",
 		"assets": "assets",
 		"blog_slug": "blog",
+		"posts_at_root": false,
 		"posts_per_page": 2,
 		"sort_by": "date",
 		"fonts": ["Bree Serif", "Inter"],
@@ -2621,6 +2624,11 @@ func apply_cli_overrides(settings, cli_args) {
 			i := i + 1
 			continue
 		}
+		if token == "--posts-at-root" {
+			settings["posts_at_root"] = true
+			i := i + 1
+			continue
+		}
 		if token == "--no-index" {
 			settings["no_index"] = true
 			i := i + 1
@@ -2762,6 +2770,7 @@ func normalize_settings(settings) {
 		{"key": "minify", "fallback": false},
 		{"key": "download_remote_images", "fallback": false},
 		{"key": "drafts", "fallback": false},
+		{"key": "posts_at_root", "fallback": false},
 		{"key": "no_index", "fallback": false},
 		{"key": "no_aux", "fallback": false},
 		{"key": "no_aliases", "fallback": false}
@@ -3277,7 +3286,7 @@ func build_site(settings) {
 		}
 
 		route := ""
-		if len(settings["blog_slug"]) > 0 {
+		if len(settings["blog_slug"]) > 0 && !settings["posts_at_root"] {
 			route := settings["blog_slug"] + "/" + slug + "/"
 		} else {
 			route := slug + "/"
