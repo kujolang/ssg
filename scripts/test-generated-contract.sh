@@ -58,6 +58,32 @@ draft: true
 This draft page must not be published.
 EOF
 
+	cat > content/pages/frontmatter-delimiter-proof.md <<'EOF'
+---
+title: Delimiter Proof
+description: "A quoted --- delimiter stays in frontmatter."
+---
+
+# Delimiter-safe body
+
+This body keeps a literal --- sequence intact.
+EOF
+
+	cp assets/images/post-welcome-kujo-ssg.jpg escape-featured-image.jpg
+	cat > content/pages/escaped-featured-image.md <<'EOF'
+---
+title: Escaped Featured Image
+featured_image: ../../escape-featured-image.jpg
+---
+
+# Escaped image must not be copied
+EOF
+
+	cat > content/pages/malformed-frontmatter.md <<'EOF'
+---
+title: Missing closing delimiter
+EOF
+
 	cat > content/posts/draft-post.md <<'EOF'
 ---
 title: Draft Post
@@ -109,6 +135,9 @@ EOF
 	assert_path_exists output/getting-started/index.html
 	assert_path_exists output/blog/welcome-to-kujo-ssg/index.html
 	assert_path_exists output/metadata-proof/index.html
+	assert_path_exists output/frontmatter-delimiter-proof/index.html
+	assert_path_exists output/escaped-featured-image/index.html
+	assert_path_exists output/malformed-frontmatter/index.html
 	assert_path_exists output/storefronts/north-austin/index.html
 	assert_path_exists output/storefronts/index.html
 	assert_path_exists output/tshirts/index.html
@@ -147,6 +176,13 @@ EOF
 	assert_file_contains output/metadata-proof/index.html '<meta name="twitter:image" content="https://example.com/images/post-welcome-kujo-ssg-'
 	assert_file_contains output/metadata-proof/index.html '<meta property="og:image" content="https://example.com/images/post-welcome-kujo-ssg-'
 	assert_file_contains output/metadata-proof/index.html '<meta property="og:site_name" content="Kujo SSG Starter Site">'
+	assert_file_contains output/frontmatter-delimiter-proof/index.html '<title>Delimiter Proof | Kujo SSG Starter Site</title>'
+	assert_file_contains output/frontmatter-delimiter-proof/index.html '<meta name="description" content="A quoted --- delimiter stays in frontmatter.">'
+	assert_file_contains output/frontmatter-delimiter-proof/index.html 'Delimiter-safe body'
+	assert_file_contains output/frontmatter-delimiter-proof/index.html 'literal --- sequence intact'
+	assert_file_not_contains output/escaped-featured-image/index.html 'escape-featured-image'
+	assert_output_contains "Warning: Rejected featured_image '../../escape-featured-image.jpg' in content/pages/escaped-featured-image.md"
+	assert_output_contains 'Warning: Unclosed frontmatter delimiter in content/pages/malformed-frontmatter.md (line 1).'
 	assert_path_missing output/draft-page
 	assert_path_missing output/draft-post
 	assert_file_contains output/llms.txt 'https://example.com/metadata-proof/'

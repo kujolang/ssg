@@ -563,7 +563,7 @@ func excerpt_from_markdown(markdown) {
 	return join(out, " ") + "..."
 }
 
-func parse_frontmatter(content) {
+func parse_frontmatter(content, source_file) {
 	meta := {
 		"title": "",
 		"author": "",
@@ -588,22 +588,49 @@ func parse_frontmatter(content) {
 	}
 	body := trim(content)
 
-	trimmed := trim(content)
-	if starts_with(trimmed, "---") {
-		parts := split(content, "---")
-		if len(parts) >= 3 {
-			frontmatter_text := trim(parts[1])
-			body_parts := []
-			idx := 2
+	# Only complete delimiter lines delimit frontmatter. This preserves literal
+	# `---` text in quoted YAML values and in the Markdown body.
+	lines := split(content, "\n")
+	if len(lines) > 0 && trim(lines[0]) == "---" {
+		closing_line := 0
+		has_closing_delimiter := false
+		idx := 1
+		loop {
+			if idx >= len(lines) {
+				break
+			}
+			if trim(lines[idx]) == "---" {
+				closing_line = idx
+				has_closing_delimiter = true
+				break
+			}
+			idx := idx + 1
+		}
+
+		if !has_closing_delimiter {
+			print("Warning: Unclosed frontmatter delimiter in " + source_file + " (line 1).")
+		} else {
+			frontmatter_lines := []
+			idx := 1
 			loop {
-				if idx >= len(parts) {
+				if idx >= closing_line {
 					break
 				}
-				body_parts = push(body_parts, parts[idx])
+				frontmatter_lines = push(frontmatter_lines, lines[idx])
 				idx := idx + 1
 			}
-			body := trim(join(body_parts, "---"))
+			body_lines := []
+			idx := closing_line + 1
+			loop {
+				if idx >= len(lines) {
+					break
+				}
+				body_lines = push(body_lines, lines[idx])
+				idx := idx + 1
+			}
 
+			frontmatter_text := trim(join(frontmatter_lines, "\n"))
+			body := trim(join(body_lines, "\n"))
 			if len(frontmatter_text) > 0 {
 				try {
 					parsed := parse_yaml(frontmatter_text)
@@ -621,7 +648,7 @@ func parse_frontmatter(content) {
 						}
 					}
 				} except err {
-					# Ignore frontmatter parse errors and keep defaults.
+					print("Warning: Could not parse frontmatter in " + source_file + " (line 1).")
 				}
 			}
 		}
@@ -1256,6 +1283,44 @@ func featured_image_output_base(source_key) {
 	return name_slug + "-" + hash_short
 }
 
+func path_is_within_root(candidate, root) {
+	if !path_exists(candidate) || !path_exists(root) {
+		return false
+	}
+
+	candidate_absolute := ""
+	root_absolute := ""
+	try {
+		candidate_absolute = path_absolute(candidate)
+		root_absolute = path_absolute(root)
+	} except err {
+		return false
+	}
+
+	if candidate_absolute == root_absolute {
+		return true
+	}
+	if !ends_with(root_absolute, "/") {
+		root_absolute = root_absolute + "/"
+	}
+	return starts_with(candidate_absolute, root_absolute)
+}
+
+func is_allowed_local_featured_image_source(candidate, source_file, settings) {
+	allowed_roots := [settings["content"], settings["assets"], dirname(source_file)]
+	root_idx := 0
+	loop {
+		if root_idx >= len(allowed_roots) {
+			break
+		}
+		if path_is_within_root(candidate, allowed_roots[root_idx]) {
+			return true
+		}
+		root_idx := root_idx + 1
+	}
+	return false
+}
+
 func resolve_local_featured_image_source(path_value, source_file, settings) {
 	source := trim(path_value)
 	if len(source) == 0 {
@@ -1278,6 +1343,7 @@ func resolve_local_featured_image_source(path_value, source_file, settings) {
 		}
 	}
 
+	rejected_candidate := ""
 	candidate_idx := 0
 	loop {
 		if candidate_idx >= len(candidates) {
@@ -1291,8 +1357,14 @@ func resolve_local_featured_image_source(path_value, source_file, settings) {
 			continue
 		}
 		if path_exists(clean_candidate) && path_is_file(clean_candidate) {
-			return clean_candidate
+			if is_allowed_local_featured_image_source(clean_candidate, source_file, settings) {
+				return clean_candidate
+			}
+			rejected_candidate = clean_candidate
 		}
+	}
+	if len(rejected_candidate) > 0 {
+		print("Warning: Rejected featured_image '" + source + "' in " + source_file + ": resolved path escapes approved content/assets roots.")
 	}
 
 	return ""
@@ -1420,7 +1492,7 @@ func process_featured_image_path(path_value, source_file, settings) {
 
 	local_source := resolve_local_featured_image_source(source, source_file, settings)
 	if len(local_source) == 0 {
-		return source
+		return ""
 	}
 
 	return convert_or_copy_featured_image(local_source, local_source, settings)
@@ -3057,7 +3129,7 @@ func build_site(settings) {
 
 		page_file := page_files[page_file_idx]
 		page_file_idx := page_file_idx + 1
-		parsed := parse_frontmatter(read_file(page_file))
+		parsed := parse_frontmatter(read_file(page_file), page_file)
 		meta := parsed["meta"]
 		if !settings["drafts"] && parse_bool_value(meta["draft"], false) {
 			continue
@@ -3224,7 +3296,7 @@ func build_site(settings) {
 		if post_stripe != shard {
 			continue
 		}
-		parsed := parse_frontmatter(read_file(post_file))
+		parsed := parse_frontmatter(read_file(post_file), post_file)
 		meta := parsed["meta"]
 		if !settings["drafts"] && parse_bool_value(meta["draft"], false) {
 			continue
@@ -3447,7 +3519,7 @@ func build_site(settings) {
 
 			item_file := collection_files[collection_file_idx]
 			collection_file_idx := collection_file_idx + 1
-			parsed := parse_frontmatter(read_file(item_file))
+			parsed := parse_frontmatter(read_file(item_file), item_file)
 			meta := parsed["meta"]
 			if !settings["drafts"] && parse_bool_value(meta["draft"], false) {
 				continue
