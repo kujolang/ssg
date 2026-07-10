@@ -133,7 +133,7 @@ The real gaps fall into three buckets:
 | `nav_hide` | ✅ | ✅ | `build_navigation:729` |
 | `robots.txt` public/private + Sitemap line | ✅ | ✅ | `:3174` |
 | `sitemap.xml` (sitemaps.org schema, absolute URLs) | ✅ | ✅ (superset: adds `changefreq`/`priority`) | `:3090` |
-| `llms.txt` (title, posts, pages, sitemap ref) | ✅ | ✅ | `:3182` (Kujo omits the reference SSG's hash IDs — see note) |
+| `llms.txt` (title, posts, pages, custom collections, sitemap ref) | ✅ | ✅ (superset: adds custom collection indexes and items) | `build.kujo` aux-output finalization (Kujo omits the reference SSG's hash IDs — see note) |
 | RSS `/feed/index.xml`, 20-item cap | ✅ | ⚠️ partial | missing `pubDate`/`lastBuildDate` — see P1-2 |
 | 404 page | ✅ | ✅ | `:3222` |
 | Config yml/yaml/json + CLI precedence | ✅ | ✅ | `load_config:2039`, `apply_cli_overrides:2090` |

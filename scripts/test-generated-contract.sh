@@ -70,6 +70,35 @@ draft: true
 This draft post must not be published.
 EOF
 
+	mkdir -p content/projects
+	cat > content/projects/alpha-project.md <<'EOF'
+---
+title: Alpha Project
+date: 2026-05-10
+description: First project listed in llms.txt.
+---
+
+# Alpha Project
+EOF
+	cat > content/projects/newest-project.md <<'EOF'
+---
+title: Newest Project
+date: 2026-05-12
+description: Newest project listed first by the default date sort.
+---
+
+# Newest Project
+EOF
+	cat > content/projects/draft-project.md <<'EOF'
+---
+title: Draft Project
+date: 2026-05-13
+draft: true
+---
+
+# Draft Project
+EOF
+
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --site-url https://example.com
 	assert_output_contains "Build complete"
 	assert_path_exists output/index.html
@@ -122,10 +151,19 @@ EOF
 	assert_path_missing output/draft-post
 	assert_file_contains output/llms.txt 'https://example.com/metadata-proof/'
 	assert_file_contains output/llms.txt 'https://example.com/blog/welcome-to-kujo-ssg/'
+	assert_file_contains output/llms.txt '## Projects'
+	assert_file_contains output/llms.txt '[Projects index](https://example.com/projects/)'
+	assert_file_contains output/llms.txt '[Newest Project](https://example.com/projects/newest-project/)'
+	assert_file_contains output/llms.txt '[Alpha Project](https://example.com/projects/alpha-project/)'
+	assert_substring_order output/llms.txt '## Projects' '[Projects index](https://example.com/projects/)'
+	assert_substring_order output/llms.txt '[Projects index](https://example.com/projects/)' '[Newest Project](https://example.com/projects/newest-project/)'
+	assert_substring_order output/llms.txt '[Newest Project](https://example.com/projects/newest-project/)' '[Alpha Project](https://example.com/projects/alpha-project/)'
+	assert_substring_order output/llms.txt '## Projects' '## Shorts'
 	if grep -Fq 'draft-post' output/sitemap.xml || grep -Fq 'draft-post' output/llms.txt || grep -Fq 'Draft Post' output/blog/index.html; then
 		echo 'Draft content leaked into indexed outputs'
 		exit 1
 	fi
+	assert_file_not_contains output/llms.txt 'Draft Project'
 
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --site-url https://example.com --no-aux
 	assert_output_contains "Build complete"

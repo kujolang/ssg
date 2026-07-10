@@ -447,6 +447,11 @@ Primary outputs include:
 Twitter Card, JSON-LD, and standard metadata derived from frontmatter and config
 (see [SEO And Social Metadata](#seo-and-social-metadata)).
 
+Public `llms.txt` output includes Posts and Pages sections followed by one
+section per built custom collection. Each collection section links to its index
+and every non-draft item using absolute URLs; collection sections are ordered by
+content directory name, and items follow the configured `sort_by` order.
+
 ## Troubleshooting
 
 - If Kujo is not on your `PATH`, set `KUJO_BIN` or `KUJO_RUNTIME_DIR` before running builds or gates.

@@ -184,7 +184,9 @@ The original build accumulated `posts_data`, `all_routes`, `sitemap_lines`, and 
 Rewrites:
 - **Post index** is streamed to a temp file (`.kujo-post-index.tmp`) as tab-delimited records (`append_file`, `O(1)`), then materialized once with `sort(split(read_file(...)))` (two native, near-linear calls). The in-language insertion sort is gone.
 - **Sitemap** entries are streamed to `.kujo-sitemap.tmp` during rendering and wrapped once at the end — no routes array, no `O(n^2)` dedup scan.
-- **llms.txt** is streamed directly to the output file via `append_file`.
+- **llms.txt** is streamed directly to the output file via `append_file`;
+  custom-collection sections are streamed to a temporary file while collections
+  are built, then appended once and removed during aux-output finalization.
 - Temp files are deleted before the build returns (never published).
 
 ### 2. Taxonomy hot-path (≈2.3× per-page win)

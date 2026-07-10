@@ -3416,6 +3416,10 @@ func build_site(settings) {
 		}
 	}
 
+	llms_collections_tmp := path_join(output_dir, ".kujo-llms-collections.tmp")
+	if path_exists(llms_collections_tmp) {
+		delete_file(llms_collections_tmp)
+	}
 	collection_idx := 0
 	loop {
 		if collection_idx >= len(custom_collections) {
@@ -3648,6 +3652,20 @@ func build_site(settings) {
 		write_route_alias(output_dir, listing_route, make_aliases)
 		if want_sitemap {
 			append_file(sitemap_tmp, sitemap_url_entry(site_url, listing_route, "", blog_prefix))
+		}
+		if settings["llms"] == "public" && len(site_url) > 0 && !settings["no_aux"] {
+			append_file(llms_collections_tmp, "\n## " + collection_title + "\n")
+			append_file(llms_collections_tmp, "- [" + collection_title + " index](" + site_url + "/" + listing_route + ")\n")
+			llms_item_idx := 0
+			loop {
+				if llms_item_idx >= len(sorted_collection_items) {
+					break
+				}
+
+				item := sorted_collection_items[llms_item_idx]
+				llms_item_idx := llms_item_idx + 1
+				append_file(llms_collections_tmp, "- [" + item["title"] + "](" + site_url + "/" + item["route"] + ")\n")
+			}
 		}
 	}
 
@@ -3888,6 +3906,10 @@ func build_site(settings) {
 				page_data := built_pages[built_page_idx]
 				built_page_idx := built_page_idx + 1
 				append_file(llms_path, "- [" + page_data["title"] + "](" + site_url + "/" + page_data["route"] + ")\n")
+			}
+			if path_exists(llms_collections_tmp) {
+				append_file(llms_path, read_file(llms_collections_tmp))
+				delete_file(llms_collections_tmp)
 			}
 			append_file(llms_path, "\n## Sitemap\n" + site_url + "/sitemap.xml\n")
 		}
