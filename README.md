@@ -279,6 +279,11 @@ Frontmatter keys supported across pages, posts, and custom types:
 - `categories`
 - `taxonomies`
 
+Frontmatter opens and closes only with a line containing `---`. Literal `---`
+text in a quoted value or Markdown body is preserved. An unclosed or malformed
+frontmatter block is left out of metadata processing and produces a warning with
+the source file and delimiter line.
+
 `draft: true` excludes content from generated public outputs. Pass `--drafts` to
 include draft content in a build for preview/staging without publishing it by
 default.
@@ -347,12 +352,18 @@ For most teams, the fastest path to a working site is:
 `featured_image` supports both local and remote sources.
 
 - Local paths are resolved relative to the content file, `content/`, and `assets/`
+- Each existing local candidate is canonicalized and must remain under the
+  content root, assets root, or the content file's directory; traversal and
+  symlink escapes are rejected with a source-file warning
 - Processed assets are written to `output/images/` with deterministic names
 - Raster images are converted to WebP when possible
 - If conversion fails, Kujo SSG falls back to the original extension
 - Remote images are only downloaded when `download_remote_images: true` or `--download-remote-images` is enabled
 
 For deterministic CI and release builds, leave remote downloads disabled unless the build explicitly needs mirrored remote assets.
+
+An unresolved or rejected local image is omitted rather than emitted as a raw
+path in generated HTML.
 
 ## Fonts
 

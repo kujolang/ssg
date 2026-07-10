@@ -1,5 +1,10 @@
 # the reference SSG Feature-Parity Audit — Kujo SSG
 
+> **Status: historical snapshot (superseded for current implementation status).**
+> This June 18 audit records the pre-remediation state and its line references
+> are not maintained. Consult [Current capability matrix](current-capability-matrix.md)
+> and the behavior contracts before treating a finding as open.
+
 **Date:** 2026-06-18
 **Audited build:** `build.kujo` (3303 lines) at repo root
 **Reference:** [the reference SSG project](the reference SSG project repository) — `the reference SSG core module` (2449 lines), `cli.py`, `settings.py`, and the bundled Jinja2 templates (`base.html`, `post.html`, `page.html`, `index.html`, `tag.html`, `category.html`, `404.html`).

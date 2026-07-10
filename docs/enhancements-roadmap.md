@@ -19,15 +19,17 @@ and a clean `bash scripts/run_release_gate.sh`.
 
 ## P0 — Robustness & security hardening
 
-### P0-1. Featured-image path resolution can escape the content/asset roots
+### P0-1. Featured-image path resolution can escape the content/asset roots — Complete (2026-07-10)
 - **Severity:** Medium (path traversal with attacker-influenced frontmatter)
 - **What:** `resolve_local_featured_image_source` (`build.kujo`) joins
   `featured_image` against `content/`, `assets/`, and the source file dir, then
   reads/copies whatever resolves — including `../../etc/...` style escapes. Safe
   for trusted authors; unsafe when content is user-contributed.
-- **Action:** After resolving a candidate, canonicalize it and assert it stays
-  within an allowed root (content/assets/source dir). Reject + warn otherwise.
-- **Test:** a `featured_image: ../../secret.png` fixture must not be copied out.
+- **Resolution:** Existing candidates are canonicalized and accepted only when
+  they remain inside an approved content/assets/source-directory root. Escapes
+  are omitted and produce a source-file warning.
+- **Contract:** `scripts/test-generated-contract.sh` rejects an escaping fixture
+  while retaining ordinary local featured-image processing.
 
 ### P0-2. Remote image / font download has no destination policy by default
 - **Severity:** Medium (SSRF surface when `--download-remote-images` is on)
@@ -40,14 +42,16 @@ and a clean `bash scripts/run_release_gate.sh`.
   loopback / link-local destinations for remote fetches. Keep CI deterministic.
 - **Test:** remote fetch of a `127.0.0.1` URL is refused when the guard is on.
 
-### P0-3. Frontmatter split is fragile when values contain `---`
+### P0-3. Frontmatter split is fragile when values contain `---` — Complete (2026-07-10)
 - **Severity:** Low/Medium (silent mis-parse)
 - **What:** `parse_frontmatter` does `split(content, "---")`. A frontmatter value
   containing `---` (or a body that starts before a clean delimiter) can split the
   document incorrectly.
-- **Action:** Split only on the first two `^---$` *line* boundaries instead of all
-  `---` substrings; or delegate to a native frontmatter splitter `[RUNTIME]`.
-- **Test:** fixture with `description: "a --- b"` round-trips correctly.
+- **Resolution:** `parse_frontmatter` now accepts only complete delimiter lines
+  and preserves literal dashes in quoted YAML and Markdown bodies. Unclosed
+  delimiter warnings include the source file and line.
+- **Contract:** `scripts/test-generated-contract.sh` covers quoted literal dashes,
+  body literal dashes, and an unclosed delimiter diagnostic.
 
 ---
 
@@ -124,7 +128,7 @@ any scale" showcase.
 
 ## Suggested order
 
-1. P0-1, P0-2, P0-3 (security/robustness — cheap, high trust value).
+1. P0-2 remote-fetch destination policy (the remaining P0 security item).
 2. P1-1 future posts, P1-3 reading time (small, high adopter value).
 3. P1-2 `--watch` (developer-experience win).
 4. P2-1, P2-2, P2-3 (presentation; do before any "1.x launch").

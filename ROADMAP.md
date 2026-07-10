@@ -25,14 +25,15 @@ Current validated release path:
 
 | Area | Current | Target | Priority | Status |
 |---|---|---|---|---|
-| Core CLI parity flags | Partial | Full parity | P0 | In progress |
+| Core CLI parity flags | Present | Validated supported/reserved CLI surface | P0 | Validated |
 | Pages, slugs, drafts, metadata | Partial | Full parity | P0 | Validated |
 | Pagination and sorting | Partial | Full parity | P0 | Validated |
 | robots/404/llms outputs | Present | Full parity | P0 | Validated |
 | Init scaffolding command | Partial | Full parity | P1 | In progress |
 | Config loading (YML/YAML/JSON) | Present | Fully validated | P0 | Validated |
 | CLI override precedence | Present | Fully validated | P0 | Validated |
-| README parity docs | Partial | Complete parity docs | P1 | Validated |
+| README parity docs | Present | Complete parity docs | P1 | Validated |
+| Security hardening | Partial | Contained local images, delimiter-aware frontmatter, remote-fetch policy | P0 | In progress |
 | Design rewrite (new branding system) | Pending style input | Complete visual rewrite | P1 | [ ] |
 
 ## Phase 1: Baseline And Parity Definition
@@ -221,7 +222,7 @@ Acceptance criteria:
 ## Completion Checklist
 
 - [ ] All phases complete.
-- [x] No open P0 items.
+- [ ] No open P0 items (SSG-002 remote-fetch destination policy remains open).
 - [x] No regression findings.
 - [x] Build output validated.
 - [ ] Roadmap marked complete with final date and commit hash.
@@ -236,3 +237,4 @@ Acceptance criteria:
 - 2026-05-28: Added generated-output coverage for slug routes, custom collection item routes, draft exclusion, and SEO/Open Graph/Twitter/canonical metadata, and marked content parity validated.
 - 2026-05-28: Switched post sorting to a stable implementation and added generated-output coverage for pagination boundaries plus deterministic `date`, `title`, `author`, and `order` sorting, including tie and missing-order behavior.
 - 2026-05-28: Rewrote the README into a forward-facing production guide, removed stale interpreter-era wording, and aligned the docs status with the now-closed P0 parity items.
+- 2026-07-10: Reconciled historic parity status with current contract coverage. Local featured-image containment and delimiter-aware frontmatter are validated; remote-fetch destination policy remains the open P0 security item.

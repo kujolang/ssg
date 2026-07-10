@@ -68,6 +68,7 @@ main() {
 	cd "$REPO_ROOT"
 	bash scripts/test-cli-contract.sh
 	bash scripts/test-generated-contract.sh
+	bash scripts/test-docs-contract.sh
 	"$KUJO_BIN" run ./build.kujo -- --site-url https://example.com
 	./scripts/validate-generated-output.sh output
 	echo "CI checks passed"
