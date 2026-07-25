@@ -2,24 +2,58 @@
 
 LAST_OUTPUT=""
 
-run_expect_success() {
+run_capture() {
 	local output
-	if ! output=$("$@" 2>&1); then
-		echo "FAIL command should have succeeded: $*"
-		printf '%s\n' "$output"
-		exit 1
+	local status
+	local timeout_secs="${SSG_TEST_COMMAND_TIMEOUT_SECS:-180}"
+
+	printf 'RUN'
+	printf ' %q' "$@"
+	printf '\n'
+
+	if command -v timeout >/dev/null 2>&1; then
+		output=$(timeout "$timeout_secs" "$@" 2>&1)
+		status=$?
+	else
+		output=$("$@" 2>&1)
+		status=$?
 	fi
 	LAST_OUTPUT="$output"
+	return "$status"
+}
+
+run_expect_success() {
+	local status
+	set +e
+	run_capture "$@"
+	status=$?
+	set -e
+	if [[ "$status" -ne 0 ]]; then
+		echo "FAIL command should have succeeded: $*"
+		if [[ "$status" -eq 124 ]]; then
+			echo "Command timed out after ${SSG_TEST_COMMAND_TIMEOUT_SECS:-180}s"
+		fi
+		printf '%s\n' "$LAST_OUTPUT"
+		exit 1
+	fi
 }
 
 run_expect_failure() {
-	local output
-	if output=$("$@" 2>&1); then
+	local status
+	set +e
+	run_capture "$@"
+	status=$?
+	set -e
+	if [[ "$status" -eq 0 ]]; then
 		echo "FAIL command should have failed: $*"
-		printf '%s\n' "$output"
+		printf '%s\n' "$LAST_OUTPUT"
 		exit 1
 	fi
-	LAST_OUTPUT="$output"
+	if [[ "$status" -eq 124 ]]; then
+		echo "FAIL command timed out instead of failing normally: $*"
+		printf '%s\n' "$LAST_OUTPUT"
+		exit 1
+	fi
 }
 
 assert_output_contains() {

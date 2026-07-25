@@ -150,6 +150,82 @@ assert_glob_exists() {
 	fi
 }
 
+setup_cli_contract_site() {
+	local site_dir="$1"
+
+	mkdir -p "$site_dir/content/pages" "$site_dir/content/posts" "$site_dir/templates" "$site_dir/assets/css"
+	cat > "$site_dir/content/pages/about.md" <<'EOF'
+---
+title: About
+description: About page.
+---
+
+# About
+EOF
+	cat > "$site_dir/content/pages/contact.md" <<'EOF'
+---
+title: Contact
+description: Contact page.
+---
+
+# Contact
+EOF
+	cat > "$site_dir/content/pages/getting-started.md" <<'EOF'
+---
+title: Getting Started
+description: Getting started page.
+---
+
+# Getting Started
+EOF
+	for idx in 1 2 3 4; do
+		cat > "$site_dir/content/posts/post-${idx}.md" <<EOF
+---
+title: Post ${idx}
+author: 1
+date: 2026-05-0${idx}
+description: Post ${idx} description.
+---
+
+# Post ${idx}
+
+Body ${idx}.
+EOF
+	done
+	cat > "$site_dir/content/authors.yml" <<'EOF'
+1: Test Author
+EOF
+	cat > "$site_dir/content/categories.yml" <<'EOF'
+1: News
+EOF
+	cat > "$site_dir/content/tags.yml" <<'EOF'
+1: Test
+EOF
+	cat > "$site_dir/templates/layout.html" <<'EOF'
+<!DOCTYPE html><html lang="{{lang}}"><head><title>{{page_title}}</title>{{canonical_tag}}<link rel="stylesheet" href="{{stylesheet_path}}"></head><body><nav>{{navigation}}</nav><p>{{site_tagline}}</p><main id="main-content">{{content}}</main></body></html>
+EOF
+	cat > "$site_dir/templates/page.html" <<'EOF'
+<article><h1>{{title}}</h1>{{featured_image_html}}<section>{{body}}</section></article>
+EOF
+	cat > "$site_dir/templates/post.html" <<'EOF'
+<article><h1>{{title}}</h1>{{featured_image_html}}<section>{{body}}</section></article>
+EOF
+	cat > "$site_dir/templates/page-home.html" <<'EOF'
+<main id="main-content"><h1>{{title}}</h1><p>{{description}}</p>{{posts_html}}{{pagination}}</main>
+EOF
+	cat > "$site_dir/templates/page-blog.html" <<'EOF'
+<main id="main-content"><h1>Blog</h1><p>{{description}}</p>{{posts_html}}{{pagination}}</main>
+EOF
+	cat > "$site_dir/templates/404.html" <<'EOF'
+<main id="main-content"><h1>Not found</h1></main>
+EOF
+	cat > "$site_dir/assets/css/style.css" <<'EOF'
+body {
+	color: #111111;
+}
+EOF
+}
+
 main() {
 	local temp_dir
 	temp_dir="$(mktemp -d)"
@@ -161,7 +237,7 @@ main() {
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --version
 	assert_output_contains "build.kujo 1.2.0"
 
-	setup_temp_site "$REPO_ROOT" "$temp_dir"
+	setup_cli_contract_site "$temp_dir"
 	pushd "$temp_dir" >/dev/null
 
 	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --definitely-not-a-real-flag
