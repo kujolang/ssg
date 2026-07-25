@@ -17,7 +17,7 @@ has been superseded.
 Run the supported checks with:
 
 ```bash
-KUJO_BIN=/path/to/kujo bash scripts/run_ci_checks.sh
+KUJO_BIN=kujo bash scripts/run_ci_checks.sh
 ```
 
 The CI script runs the CLI, generated-output, documentation, starter-build, and

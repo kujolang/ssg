@@ -47,7 +47,7 @@ It fits the Clarity / Context / Control story by keeping content models, routes,
 
 ## Requirements
 
-- Kujo CLI available on your `PATH`, or a local Kujo binary path exposed through `KUJO_BIN`
+- Kujo CLI available on your `PATH`; set `KUJO_BIN=kujo` only when a script requires the variable
 
 ## Runtime Capabilities
 
@@ -103,7 +103,7 @@ to the single-process build (sitemap URL order aside):
 ```bash
 # bash scripts/build-parallel.sh <shards|auto> <concurrency|auto> [build args...]
 # `auto` sizes shards (~120 posts each) and concurrency (= CPU cores) for you:
-KUJO_BIN=/path/to/kujo bash scripts/build-parallel.sh auto auto \
+KUJO_BIN=kujo bash scripts/build-parallel.sh auto auto \
   --content content --output output --site-url https://example.com --posts-per-page 25
 ```
 
@@ -154,8 +154,8 @@ The release gate checks changelog/version alignment first, then runs the full CI
 
 If Kujo is not on your `PATH`, set one of these before running the gates:
 
-- `KUJO_BIN=/path/to/kujo`
-- `KUJO_RUNTIME_DIR=/path/to/kujo-runtime-repo`
+- `KUJO_BIN=kujo`
+- `KUJO_RUNTIME_DIR=/path/to/local-kujo-source-checkout`
 
 ## Project Layout
 

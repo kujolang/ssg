@@ -38,10 +38,10 @@ Current verified state:
 ## Baseline
 Build and runtime baseline:
 - VM mode build command:
-  - `/path/to/kujo/target/debug/kujo run ./build.kujo -- --site-url https://example.com`
+  - `kujo run ./build.kujo -- --site-url https://example.com`
   - Result: passed
 - Interpreter mode build command:
-  - `/path/to/kujo/target/debug/kujo run --interpreter ./build.kujo -- --site-url https://example.com`
+  - `kujo run --interpreter ./build.kujo -- --site-url https://example.com`
   - Result: no longer required for repo-local release validation
 
 Generated output baseline at audit time:
@@ -145,7 +145,7 @@ No existing project test harness was detected in this repo snapshot, so no unit/
 ## Validation Commands
 ```bash
 # Build attempt (VM mode; validated release path)
-/path/to/kujo/target/debug/kujo run ./build.kujo -- --site-url https://example.com
+kujo run ./build.kujo -- --site-url https://example.com
 
 # Full CI gate
 bash scripts/run_ci_checks.sh

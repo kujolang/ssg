@@ -48,7 +48,7 @@ rg -n "print\\(|echo|printf|cat <<|TODO|FIXME|example|generated|legacy|expected"
 Use the standard Kujo VM path:
 
 ```bash
-KUJO_BIN=/path/to/kujo bash scripts/run_ci_checks.sh
+KUJO_BIN=kujo bash scripts/run_ci_checks.sh
 ```
 
 For focused changes, run the closest contract first, then the full gate. If `kujo` is not on `PATH`, set `KUJO_BIN` or `KUJO_RUNTIME_DIR`.
