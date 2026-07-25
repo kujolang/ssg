@@ -156,6 +156,49 @@ If Kujo is not on your `PATH`, set a non-default runtime before running the gate
 
 - `KUJO_RUNTIME_DIR=/path/to/local-kujo-source-checkout`
 
+## DocGen Documentation Bridge
+
+Use `scripts/docgen_ssg_bridge.kujo` to turn Kujo DocGen output into normal
+reviewable SSG Markdown content. The bridge can run `kujo docgen`, read the
+stable `docgen-summary/v1` JSON payload, generate frontmatter-backed Markdown
+under a configured content root, remove stale generated files from its manifest,
+then build and validate the site.
+
+Typical strict CI/update command:
+
+```bash
+kujo run scripts/docgen_ssg_bridge.kujo -- \
+	--target-repo /path/to/repo \
+	--content-out content/reference \
+	--docgen-out .docgen/output \
+	--cache-dir .docgen/cache \
+	--site-url https://docs.example.com \
+	--source-link-template 'https://github.com/org/repo/blob/main/{path}#L{line}' \
+	--strict
+```
+
+The generated content includes an overview page, per-language pages, per-module
+pages, and a documentation-gaps page. Frontmatter is emitted in stable key order
+with `docgen_generated: true`, `docgen_schema_version: "docgen-summary/v1"`,
+source metadata, and count fields. Re-running the same DocGen output should not
+change the generated Markdown.
+
+Gate controls:
+
+- `--strict`: fail when DocGen reports gate failures and default undocumented
+  threshold to zero.
+- `--max-undocumented <n>`, `--max-broken-links <n>`, `--max-warnings <n>`:
+  configure count thresholds.
+- `--max-discovery-skips <n>`: fail when any discovery skip counter exceeds the
+  threshold.
+- `--allow-adapter-low-yield`: permit `DOCGEN_ADAPTER_LOW_YIELD` diagnostics.
+- `--skip-build` and `--skip-validation`: useful for fixture tests or previewing
+  Markdown conversion only.
+
+The bridge only deletes files listed in
+`<content-out>/.docgen-ssg-manifest.json`, and it refuses content, DocGen output,
+or cache paths that escape the SSG root.
+
 ## Project Layout
 
 Core directories in a standard project:

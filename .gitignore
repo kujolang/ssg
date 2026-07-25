@@ -1,6 +1,7 @@
 output/
 output_*/
 .kujo-ssg-cache
+.docgen/
 generate_posts.py
 tmp/
 # Google Fonts download cache
