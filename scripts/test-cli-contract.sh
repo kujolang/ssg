@@ -54,7 +54,7 @@ llms: public
 
 watch: false
 minify: true
-download_remote_images: true
+download_remote_images: false
 no_index: false
 no_aux: false
 EOF
@@ -84,7 +84,7 @@ write_json_config() {
 	"llms": "public",
 	"watch": false,
 	"minify": true,
-	"download_remote_images": true,
+	"download_remote_images": false,
 	"no_index": false,
 	"no_aux": false
 }
@@ -199,7 +199,7 @@ llms: public
 
 watch: false
 minify: true
-download_remote_images: true
+download_remote_images: false
 no_index: false
 no_aux: false
 EOF
