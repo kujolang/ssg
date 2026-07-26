@@ -130,7 +130,12 @@ func main() {
 	}
 
 	run_command(bridge, ssg_root)
-	run_command([kujo_bin, "run", "scripts/docs_search_index.kujo", "--", "--content", content_root, "--output", search_index, "--site-url", site_url], ssg_root)
+	python_search := path_join(ssg_root, "scripts/docs_search_index.py")
+	if path_exists(python_search) {
+		run_command(["python3", python_search, "--content", content_root, "--output", search_index, "--site-url", site_url], ssg_root)
+	} else {
+		run_command([kujo_bin, "run", "scripts/docs_search_index.kujo", "--", "--content", content_root, "--output", search_index, "--site-url", site_url], ssg_root)
+	}
 	run_command([kujo_bin, "run", "./build.kujo", "--", "--site-url", site_url], ssg_root)
 	if flag_present(cli_args, "--skip-validation") {
 	} else {

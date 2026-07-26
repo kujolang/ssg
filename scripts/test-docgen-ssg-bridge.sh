@@ -156,6 +156,8 @@ main() {
 	trap "rm -rf '$temp_dir'" EXIT
 
 	setup_temp_site "$REPO_ROOT" "$temp_dir"
+	mkdir -p "$temp_dir/scripts"
+	cp "$REPO_ROOT/scripts/docgen_reduce.py" "$temp_dir/scripts/docgen_reduce.py"
 	write_fixture "$temp_dir"
 
 	run_expect_success "$KUJO_BIN" run "$REPO_ROOT/scripts/docgen_ssg_bridge.kujo" -- \
@@ -181,6 +183,32 @@ main() {
 	assert_file_contains "$temp_dir/content/reference/module-src-math-kujo.md" 'https://example.com/blob/main/src/math.kujo#L4'
 	assert_file_contains "$temp_dir/content/reference/module-src-math-kujo.md" 'Documentation needed.'
 	assert_file_contains "$temp_dir/content/reference/documentation-gaps.md" 'Document math::missing'
+
+	python3 - "$temp_dir/project.json" "$temp_dir/gaps.json" <<'PY'
+import json
+import sys
+
+project_path, gaps_path = sys.argv[1], sys.argv[2]
+with open(project_path, "r", encoding="utf-8") as handle:
+    project = json.load(handle)
+project["symbols"][0]["internal_large_field"] = "x" * (9 * 1024 * 1024)
+with open(project_path, "w", encoding="utf-8") as handle:
+    json.dump(project, handle)
+with open(gaps_path, "r", encoding="utf-8") as handle:
+    gaps = json.load(handle)
+gaps[0]["suggested_ai_prompt"] = "x" * (9 * 1024 * 1024)
+with open(gaps_path, "w", encoding="utf-8") as handle:
+    json.dump(gaps, handle)
+PY
+	run_expect_success "$KUJO_BIN" run "$REPO_ROOT/scripts/docgen_ssg_bridge.kujo" -- \
+		--ssg-root "$temp_dir" \
+		--docgen-payload "$temp_dir/payload.json" \
+		--content-out content/reference \
+		--source-link-template 'https://example.com/blob/main/{path}#L{line}' \
+		--max-undocumented 1 \
+		--skip-build \
+		--skip-validation
+	assert_file_contains "$temp_dir/content/reference/module-src-math-kujo.md" '### math::add'
 
 	local first_hash
 	local second_hash

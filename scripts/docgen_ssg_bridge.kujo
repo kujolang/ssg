@@ -1,6 +1,7 @@
 const MANIFEST_NAME := ".docgen-ssg-manifest.json"
 const MANIFEST_SCHEMA := "docgen-ssg-manifest/v1"
 const DOCGEN_SUMMARY_SCHEMA := "docgen-summary/v1"
+const MAX_KUJO_READ_FILE_BYTES := 8388608
 
 func usage() {
 	print("Usage: kujo run scripts/docgen_ssg_bridge.kujo -- [options]")
@@ -129,6 +130,51 @@ func load_json(file_path, label) {
 	} except err {
 		fail(label + " is not valid JSON: " + file_path + ": " + to_string(err))
 	}
+}
+
+func should_reduce_json(file_path) {
+	if path_exists(file_path) == false {
+		return false
+	}
+	return file_size(file_path) > MAX_KUJO_READ_FILE_BYTES
+}
+
+func reduce_docgen_json(project_path, gaps_path, docgen_out, ssg_root) {
+	if should_reduce_json(project_path) == false && should_reduce_json(gaps_path) == false {
+		return {"project_path": project_path, "gaps_path": gaps_path}
+	}
+	reduced_project := path_join(docgen_out, "docgen-bridge-project.json")
+	reduced_gaps := path_join(docgen_out, "docgen-bridge-gaps.json")
+	script_path := path_join(ssg_root, "scripts/docgen_reduce.py")
+	if path_exists(script_path) == false {
+		fail("large DocGen JSON requires reducer script: " + script_path)
+	}
+	run_command(["python3", script_path, project_path, gaps_path, reduced_project, reduced_gaps], ssg_root, true)
+	return {"project_path": reduced_project, "gaps_path": reduced_gaps}
+}
+
+func generate_large_content(payload_path, project_path, gaps_path, content_root, source_link_template, dry_run, docgen_out, ssg_root, allow_adapter_low_yield) {
+	script_path := path_join(ssg_root, "scripts/docgen_reduce.py")
+	if path_exists(script_path) == false {
+		fail("large DocGen JSON requires reducer script: " + script_path)
+	}
+	result := run_command([
+		"python3",
+		script_path,
+		"render",
+		payload_path,
+		project_path,
+		gaps_path,
+		content_root,
+		source_link_template,
+		bool_text(dry_run),
+		MANIFEST_NAME,
+		MANIFEST_SCHEMA,
+		DOCGEN_SUMMARY_SCHEMA,
+		bool_text(allow_adapter_low_yield)
+	], ssg_root, true)
+	rendered := parse_json(result)
+	return rendered["files"]
 }
 
 func run_command(command, cwd, capture) {
@@ -540,7 +586,10 @@ func validate_payload(payload, project, config) {
 	}
 	if config["allow_adapter_low_yield"] {
 	} else {
-		diagnostics := project["diagnostics"]
+		diagnostics := []
+		if has_key(project, "diagnostics") {
+			diagnostics = project["diagnostics"]
+		}
 		diag_idx := 0
 		loop {
 			if diag_idx >= len(diagnostics) { break }
@@ -834,14 +883,20 @@ if len(gaps_path) == 0 {
 }
 gaps_path = get_payload_path(gaps_path, payload_parent)
 
-project := load_json(project_path, "DocGen project JSON")
-gaps := load_json(gaps_path, "DocGen gaps JSON")
-if is_array(gaps) == false {
-	fail("DocGen gaps JSON must be an array")
+large_docgen_json := should_reduce_json(project_path) || should_reduce_json(gaps_path)
+generated_files := []
+if large_docgen_json {
+	validate_payload(payload, {}, config)
+	generated_files = generate_large_content(payload_path, project_path, gaps_path, content_root, config["source_link_template"], config["dry_run"], docgen_out, ssg_root, config["allow_adapter_low_yield"])
+} else {
+	project := load_json(project_path, "DocGen project JSON")
+	gaps := load_json(gaps_path, "DocGen gaps JSON")
+	if is_array(gaps) == false {
+		fail("DocGen gaps JSON must be an array")
+	}
+	validate_payload(payload, project, config)
+	generated_files = generate_content(payload, project, gaps, content_root, config["source_link_template"], config["dry_run"])
 }
-
-validate_payload(payload, project, config)
-generated_files := generate_content(payload, project, gaps, content_root, config["source_link_template"], config["dry_run"])
 print_summary(payload, generated_files, content_root)
 
 if config["skip_build"] {
