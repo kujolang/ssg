@@ -36,6 +36,8 @@ main() {
 	assert_output_contains "Build complete"
 	assert_path_exists output/start-here/index.html
 	assert_path_exists output/reference/index.html
+	assert_path_exists output/assets/fonts/inter-latin-400.woff2
+	assert_path_exists output/assets/fonts/inter-latin-700.woff2
 	assert_file_contains output/start-here/index.html 'class="docs-shell"'
 	assert_file_contains output/start-here/index.html 'class="docs-meta"'
 	assert_file_contains output/start-here/index.html 'href="#first-path"'
