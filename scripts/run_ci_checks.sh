@@ -69,6 +69,7 @@ main() {
 	bash scripts/test-cli-contract.sh
 	bash scripts/test-generated-contract.sh
 	bash scripts/test-docgen-ssg-bridge.sh
+	bash scripts/test-docs-template.sh
 	bash scripts/test-docs-contract.sh
 	"$KUJO_BIN" run ./build.kujo -- --site-url https://example.com
 	./scripts/validate-generated-output.sh output

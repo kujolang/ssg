@@ -19,6 +19,7 @@ It fits the Clarity / Context / Control story by keeping content models, routes,
 - Produces `sitemap.xml`, `robots.txt`, `feed/index.xml`, `llms.txt`, `404.html`, and `favicon.svg`
 - Downloads and self-hosts any Google Font as cached `woff2`, with an offline bundled fallback
 - Supports local and remote featured-image processing with deterministic output names
+- Includes a reusable docs-site starter with docs templates, local search, DocGen update automation, and package generation
 - Validates CLI behavior, config precedence, generated output, and release-gate checks with dedicated project scripts
 - Ships with starter content, templates, assets, and lookup files for a real first-run build
 
@@ -199,6 +200,44 @@ The bridge only deletes files listed in
 `<content-out>/.docgen-ssg-manifest.json`, and it refuses content, DocGen output,
 or cache paths that escape the SSG root.
 
+## Reusable Docs Template
+
+The reusable documentation template lives under `starters/docs-site/`. It packages
+the universal documentation features that are useful across projects without
+requiring a hosted service:
+
+- Docs-specific page and reference templates
+- Structured page frontmatter for section, audience, difficulty, status, version,
+  prerequisites, previous/next links, nav labels, and search exclusion
+- Local search index generation through `scripts/docs_search_index.kujo`
+- One-command generated-reference refresh through `scripts/update_docs.kujo`
+- Deterministic generated Markdown and manifest-scoped stale cleanup through the
+  DocGen bridge
+- Local assets and JavaScript for search and code-copy controls
+
+Create a downloadable starter packet with:
+
+```bash
+bash scripts/package-docs-template.sh
+```
+
+That writes `dist/kujo-ssg-docs-template.tar.gz` with the starter content,
+templates, assets, `build.kujo`, and the docs automation scripts.
+
+For a docs-site update loop, run this from a docs starter checkout:
+
+```bash
+kujo run scripts/update_docs.kujo -- \
+	--target-repo /path/to/repo \
+	--site-url https://docs.example.com \
+	--source-link-template 'https://github.com/org/repo/blob/main/{path}#L{line}' \
+	--strict
+```
+
+The update script runs DocGen with an incremental cache, bridges only generated
+reference content into `content/reference/generated`, refreshes the local search
+index, builds the site, and validates the generated output.
+
 ## Project Layout
 
 Core directories in a standard project:
@@ -317,6 +356,17 @@ Frontmatter keys supported across pages, posts, and custom types:
 - `order`
 - `excerpt`
 - `nav_hide`
+- `nav_title`
+- `section`
+- `audience`
+- `difficulty`
+- `status`
+- `version`
+- `prerequisites`
+- `previous`
+- `next`
+- `last_updated`
+- `search_exclude`
 - `tags`
 - `categories`
 - `taxonomies`

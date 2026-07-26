@@ -1,0 +1,26 @@
+site_url: https://docs.example.com
+site_title: Kujo Docs Template
+site_tagline: Local-first documentation with generated reference content.
+
+output: output
+content: content
+templates: templates
+assets: assets
+
+blog_slug: updates
+posts_at_root: false
+posts_per_page: 12
+sort_by: order
+
+fonts:
+  - Inter
+  - Inter
+
+robots: public
+llms: public
+
+watch: false
+minify: true
+download_remote_images: false
+no_index: false
+no_aux: false
