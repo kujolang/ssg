@@ -16,6 +16,8 @@ kujo run scripts/update_docs.kujo -- \
 
 The update command writes generated reference Markdown under `content/reference/generated`, refreshes `assets/js/docs-search-index.json`, builds the SSG output, and validates it.
 
+For a fuller preview that includes private/internal example symbols and builtin/native APIs, add `--include-private --include-builtins`. Keep the default public-only mode for published API docs unless the project intentionally documents internals.
+
 ## Customize
 
 - `kujo-ssg.yml`: site URL, title, output paths, sorting, and privacy controls.

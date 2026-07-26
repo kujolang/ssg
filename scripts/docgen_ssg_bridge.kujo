@@ -21,6 +21,8 @@ func usage() {
 	print("  --project-json <path>             Existing docgen.json path")
 	print("  --gaps-json <path>                Existing docgen-gaps.json path")
 	print("  --languages <csv>                 DocGen language filter")
+	print("  --include-private                 Include private/internal symbols")
+	print("  --include-builtins                Include builtin/native API reference")
 	print("  --strict                          Fail on DocGen gates and undocumented docs")
 	print("  --allow-undocumented              Do not add --fail-on-undocumented in strict mode")
 	print("  --max-undocumented <n>            Documentation gap threshold")
@@ -522,12 +524,19 @@ func run_docgen(config, ssg_root, docgen_out, cache_dir) {
 		"--cache-dir",
 		cache_dir,
 		"--source-links",
-		"--public-only",
-		"--no-builtins",
 		"--fail-on-broken-links",
 		"--out-dir",
 		docgen_out
 	]
+	if config["include_private"] {
+		command = push(command, "--include-private")
+	} else {
+		command = push(command, "--public-only")
+	}
+	if config["include_builtins"] {
+	} else {
+		command = push(command, "--no-builtins")
+	}
 	if len(config["source_link_template"]) > 0 {
 		command = push(command, "--source-link-template")
 		command = push(command, config["source_link_template"])
@@ -834,6 +843,8 @@ func config_from_args(cli_args) {
 		"project_json": option_value(cli_args, "--project-json", ""),
 		"gaps_json": option_value(cli_args, "--gaps-json", ""),
 		"languages": option_value(cli_args, "--languages", ""),
+		"include_private": flag_present(cli_args, "--include-private"),
+		"include_builtins": flag_present(cli_args, "--include-builtins"),
 		"strict": flag_present(cli_args, "--strict"),
 		"allow_undocumented": flag_present(cli_args, "--allow-undocumented"),
 		"max_undocumented": int_option(cli_args, "--max-undocumented", -1),

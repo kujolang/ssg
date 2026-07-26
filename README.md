@@ -234,6 +234,18 @@ kujo run scripts/update_docs.kujo -- \
 	--strict
 ```
 
+For an exploratory language-site preview that includes internal/example symbols
+and builtin/native APIs, opt in explicitly:
+
+```bash
+kujo run scripts/update_docs.kujo -- \
+	--target-repo /path/to/repo \
+	--languages kujo \
+	--include-private \
+	--include-builtins \
+	--site-url http://127.0.0.1:4178
+```
+
 The update script runs DocGen with an incremental cache, bridges only generated
 reference content into `content/reference/generated`, refreshes the local search
 index, builds the site, and validates the generated output.

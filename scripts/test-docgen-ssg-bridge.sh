@@ -184,6 +184,17 @@ main() {
 	assert_file_contains "$temp_dir/content/reference/module-src-math-kujo.md" 'Documentation needed.'
 	assert_file_contains "$temp_dir/content/reference/documentation-gaps.md" 'Document math::missing'
 
+	run_expect_success "$KUJO_BIN" run "$REPO_ROOT/scripts/docgen_ssg_bridge.kujo" -- \
+		--ssg-root "$temp_dir" \
+		--docgen-payload "$temp_dir/payload.json" \
+		--content-out content/reference \
+		--include-private \
+		--include-builtins \
+		--max-undocumented 1 \
+		--skip-build \
+		--skip-validation
+	assert_file_contains "$temp_dir/content/reference/api-reference.md" 'docgen_symbol_count: 2'
+
 	python3 - "$temp_dir/project.json" "$temp_dir/gaps.json" <<'PY'
 import json
 import sys

@@ -10,6 +10,8 @@ func usage() {
 	print("  --site-url <url>                  Site URL for build/search")
 	print("  --source-link-template <template> Source links with {path} and {line}")
 	print("  --languages <csv>                 DocGen language filter")
+	print("  --include-private                 Include private/internal symbols")
+	print("  --include-builtins                Include builtin/native API reference")
 	print("  --strict                          Enforce DocGen strict gates")
 	print("  --allow-undocumented              Do not fail strict runs on undocumented symbols")
 	print("  --max-undocumented <n>            Documentation gap threshold")
@@ -127,6 +129,12 @@ func main() {
 	}
 	if flag_present(cli_args, "--allow-adapter-low-yield") {
 		bridge = push(bridge, "--allow-adapter-low-yield")
+	}
+	if flag_present(cli_args, "--include-private") {
+		bridge = push(bridge, "--include-private")
+	}
+	if flag_present(cli_args, "--include-builtins") {
+		bridge = push(bridge, "--include-builtins")
 	}
 
 	run_command(bridge, ssg_root)
