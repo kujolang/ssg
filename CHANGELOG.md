@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Added a launch-readiness Spec and deterministic Eval suite for the local SSG release review.
+
+### Documentation
+- Aligned the README version badge with the current documented SSG version.
+
 ## 1.2.0
 
 ### Added
