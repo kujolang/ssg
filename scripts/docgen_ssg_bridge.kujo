@@ -70,8 +70,8 @@ func int_option(cli_args, name, fallback) {
 	return parse_int(raw)
 }
 
-func ensure_dir(path) {
-	clean := trim(path)
+func ensure_dir(dir_path) {
+	clean := trim(dir_path)
 	if len(clean) == 0 || path_exists(clean) {
 		return null
 	}
@@ -84,10 +84,10 @@ func ensure_dir(path) {
 	}
 }
 
-func ensure_parent(path) {
-	parent := dirname(path)
-	if len(parent) > 0 {
-		ensure_dir(parent)
+func ensure_parent(file_path) {
+	parent_dir := dirname(file_path)
+	if len(parent_dir) > 0 {
+		ensure_dir(parent_dir)
 	}
 }
 
@@ -108,26 +108,26 @@ func under_root(root, value, label) {
 	return candidate_abs
 }
 
-func absolute_path_for_candidate(path) {
-	if path_exists(path) {
-		return path_absolute(path)
+func absolute_path_for_candidate(candidate_path) {
+	if path_exists(candidate_path) {
+		return path_absolute(candidate_path)
 	}
-	parent := dirname(path)
-	if len(parent) == 0 || parent == path {
-		return path
+	parent_dir := dirname(candidate_path)
+	if len(parent_dir) == 0 || parent_dir == candidate_path {
+		return candidate_path
 	}
-	parent_abs := absolute_path_for_candidate(parent)
-	return path_join(parent_abs, basename(path))
+	parent_abs := absolute_path_for_candidate(parent_dir)
+	return path_join(parent_abs, basename(candidate_path))
 }
 
-func load_json(path, label) {
-	if path_exists(path) == false {
-		fail(label + " not found: " + path)
+func load_json(file_path, label) {
+	if path_exists(file_path) == false {
+		fail(label + " not found: " + file_path)
 	}
 	try {
-		return parse_json(read_file(path))
+		return parse_json(read_file(file_path))
 	} except err {
-		fail(label + " is not valid JSON: " + path + ": " + to_string(err))
+		fail(label + " is not valid JSON: " + file_path + ": " + to_string(err))
 	}
 }
 
@@ -191,8 +191,8 @@ func fm_field(key, value) {
 	return {"key": key, "value": value}
 }
 
-func repo_name(path) {
-	base := basename(trim(path))
+func repo_name(repo_path) {
+	base := basename(trim(repo_path))
 	if len(base) == 0 {
 		return "repository"
 	}
@@ -206,6 +206,11 @@ func generated_fields(title, slug, description, payload, extra) {
 		fm_field("description", description),
 		fm_field("seo_title", title),
 		fm_field("template", "docs"),
+		fm_field("section", "Reference"),
+		fm_field("audience", "developer"),
+		fm_field("difficulty", "reference"),
+		fm_field("status", "generated"),
+		fm_field("version", "current"),
 		fm_field("docgen_generated", true),
 		fm_field("docgen_source_repo", repo_name(to_string(payload["file"]))),
 		fm_field("docgen_schema_version", DOCGEN_SUMMARY_SCHEMA)
@@ -387,35 +392,48 @@ func remove_stale(content_root, manifest, new_files, dry_run) {
 	} else {
 		return null
 	}
-	files := manifest["files"]
+	manifest_entries := manifest["files"]
 	i := 0
 	loop {
-		if i >= len(files) { break }
-		entry := to_string(files[i])
+		if i >= len(manifest_entries) { break }
+		entry := to_string(manifest_entries[i])
 		i = i + 1
-		if contains(entry, "..") || starts_with(entry, "/") {
+		if index_of(entry, "..") >= 0 || starts_with(entry, "/") {
 			fail("manifest entry escapes generated root: " + entry)
 		}
-		if string_in_list(new_files, entry) {
-		} else {
-			path := path_join(content_root, entry)
-			if path_exists(path) {
+		still_generated := false
+		new_idx := 0
+		loop {
+			if new_idx >= len(new_files) { break }
+			if new_files[new_idx] == entry {
+				still_generated = true
+				break
+			}
+			new_idx = new_idx + 1
+		}
+		if still_generated == false {
+			target_path := path_join(content_root, entry)
+			if path_exists(target_path) {
 				if dry_run {
-						skipped_delete := true
-					} else {
-						delete_file(path)
-					}
+					skipped_delete := true
+				} else {
+					delete_file(target_path)
+				}
 			}
 		}
 	}
 }
 
-func write_markdown(path, content, dry_run) {
+func write_markdown(file_path, content, dry_run) {
 	if dry_run {
-		return null
+		return false
 	}
-	ensure_parent(path)
-	write_file(path, content)
+	if path_exists(file_path) && read_file(file_path) == content {
+		return false
+	}
+	ensure_parent(file_path)
+	write_file(file_path, content, true)
+	return true
 }
 
 func add_page(pages, files, content_root, slug, body) {
@@ -432,12 +450,12 @@ func get_payload_path(raw_path, payload_parent) {
 	return path_join(payload_parent, raw_path)
 }
 
-func dirname_or_dot(path) {
-	parent := dirname(path)
-	if len(parent) == 0 {
+func dirname_or_dot(file_path) {
+	parent_dir := dirname(file_path)
+	if len(parent_dir) == 0 {
 		return "."
 	}
-	return parent
+	return parent_dir
 }
 
 func run_docgen(config, ssg_root, docgen_out, cache_dir) {
@@ -721,7 +739,7 @@ func generate_content(payload, project, gaps, content_root, source_link_template
 		skipped_manifest := true
 	} else {
 		ensure_dir(content_root)
-		write_file(path_join(content_root, MANIFEST_NAME), to_json_pretty(manifest) + "\n")
+		write_file(path_join(content_root, MANIFEST_NAME), to_json_pretty(manifest) + "\n", true)
 	}
 	return sorted_files
 }

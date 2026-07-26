@@ -396,6 +396,17 @@ func markdown_files(directory) {
 		entry := entries[entry_idx]
 		entry_idx := entry_idx + 1
 		full_path := path_join(directory, entry)
+		if path_is_dir(full_path) && starts_with(entry, ".") == false {
+			child_files := markdown_files(full_path)
+			child_idx := 0
+			loop {
+				if child_idx >= len(child_files) {
+					break
+				}
+				files = push(files, child_files[child_idx])
+				child_idx := child_idx + 1
+			}
+		}
 		if path_is_file(full_path) && ends_with(entry, ".md") {
 			files = push(files, full_path)
 		}
@@ -577,15 +588,26 @@ func parse_frontmatter(content, source_file) {
 		"canonical": "",
 		"featured_image": "",
 		"custom_url": "",
-		"template": "",
-		"draft": false,
-		"order": 1000,
-		"excerpt": "",
-		"nav_hide": false,
-		"tags": [],
-		"categories": [],
-		"taxonomies": {}
-	}
+			"template": "",
+			"draft": false,
+			"order": 1000,
+			"excerpt": "",
+			"nav_hide": false,
+			"nav_title": "",
+			"section": "",
+			"audience": "",
+			"difficulty": "",
+			"status": "",
+			"version": "",
+			"prerequisites": [],
+			"previous": "",
+			"next": "",
+			"last_updated": "",
+			"search_exclude": false,
+			"tags": [],
+			"categories": [],
+			"taxonomies": {}
+		}
 	body := trim(content)
 
 	# Only complete delimiter lines delimit frontmatter. This preserves literal
@@ -654,12 +676,14 @@ func parse_frontmatter(content, source_file) {
 		}
 	}
 
-	meta["draft"] = parse_bool_value(meta["draft"], false)
-	meta["nav_hide"] = parse_bool_value(meta["nav_hide"], false)
-	meta["order"] = parse_int_value(meta["order"], 1000)
-	meta["tags"] = to_string_array(meta["tags"])
-	meta["categories"] = to_string_array(meta["categories"])
-	meta["taxonomies"] = normalize_taxonomies_map(meta["taxonomies"])
+		meta["draft"] = parse_bool_value(meta["draft"], false)
+		meta["nav_hide"] = parse_bool_value(meta["nav_hide"], false)
+		meta["search_exclude"] = parse_bool_value(meta["search_exclude"], false)
+		meta["order"] = parse_int_value(meta["order"], 1000)
+		meta["prerequisites"] = to_string_array(meta["prerequisites"])
+		meta["tags"] = to_string_array(meta["tags"])
+		meta["categories"] = to_string_array(meta["categories"])
+		meta["taxonomies"] = normalize_taxonomies_map(meta["taxonomies"])
 
 	return {
 		"meta": meta,
@@ -712,6 +736,102 @@ func navigation_item(href, label, is_current) {
 	return "<li><a href=\"" + safe_href + "\" class=\"text-primary hover:underline\"" + current_attr + ">" + safe_label + "</a></li>"
 }
 
+func docs_list_html(values, class_name) {
+	items := to_string_array(values)
+	if len(items) == 0 {
+		return ""
+	}
+	html := "<ul class=\"" + html_escape(class_name) + "\">"
+	i := 0
+	loop {
+		if i >= len(items) {
+			break
+		}
+		html = html + "<li>" + html_escape(items[i]) + "</li>"
+		i := i + 1
+	}
+	return html + "</ul>"
+}
+
+func docs_badge(label, value) {
+	clean := trim(to_string(value))
+	if len(clean) == 0 {
+		return ""
+	}
+	return "<span class=\"docs-badge docs-badge-" + clean_slug(label) + "\"><span>" + html_escape(label) + "</span>" + html_escape(clean) + "</span>"
+}
+
+func docs_meta_html(meta) {
+	html := ""
+	html = html + docs_badge("Section", meta["section"])
+	html = html + docs_badge("Audience", meta["audience"])
+	html = html + docs_badge("Difficulty", meta["difficulty"])
+	html = html + docs_badge("Status", meta["status"])
+	html = html + docs_badge("Version", meta["version"])
+	updated := trim(to_string(meta["last_updated"]))
+	if len(updated) == 0 {
+		updated = trim(to_string(meta["date"]))
+	}
+	html = html + docs_badge("Updated", updated)
+	if len(html) == 0 {
+		return ""
+	}
+	return "<div class=\"docs-meta\" aria-label=\"Page metadata\">" + html + "</div>"
+}
+
+func docs_link_button(label, href, rel_name) {
+	clean_href := trim(to_string(href))
+	if len(clean_href) == 0 {
+		return ""
+	}
+	return "<a class=\"docs-pagination-link docs-pagination-" + html_escape(rel_name) + "\" href=\"" + xml_escape(clean_href) + "\" rel=\"" + html_escape(rel_name) + "\"><span>" + html_escape(label) + "</span></a>"
+}
+
+func docs_prev_next_html(previous, next) {
+	prev_html := docs_link_button("Previous", previous, "prev")
+	next_html := docs_link_button("Next", next, "next")
+	if len(prev_html) == 0 && len(next_html) == 0 {
+		return ""
+	}
+	return "<nav class=\"docs-prev-next\" aria-label=\"Previous and next pages\">" + prev_html + next_html + "</nav>"
+}
+
+func docs_toc_html(markdown) {
+	lines := split(markdown, "\n")
+	html := ""
+	i := 0
+	loop {
+		if i >= len(lines) {
+			break
+		}
+		line := trim(lines[i])
+		i := i + 1
+		level := 0
+		title := ""
+		if starts_with(line, "## ") && starts_with(line, "####") == false {
+			if starts_with(line, "### ") {
+				level = 3
+				title = trim(substring(line, 4, len(line)))
+			} else {
+				level = 2
+				title = trim(substring(line, 3, len(line)))
+			}
+		}
+		if level > 0 && len(title) > 0 {
+			anchor := clean_slug(title)
+			html = html + "<li class=\"toc-level-" + to_string(level) + "\"><a href=\"#" + xml_escape(anchor) + "\">" + html_escape(title) + "</a></li>"
+		}
+	}
+	if len(html) == 0 {
+		return ""
+	}
+	return "<nav class=\"docs-toc\" aria-label=\"On this page\"><h2>On this page</h2><ol>" + html + "</ol></nav>"
+}
+
+func docs_body_html(markdown) {
+	return markdown_to_html(markdown)
+}
+
 func build_navigation(pages_data, custom_collections, current_route, blog_slug) {
 	current_path := route_to_path(current_route)
 	html := navigation_item("/", "Home", current_path == "/")
@@ -729,12 +849,16 @@ func build_navigation(pages_data, custom_collections, current_route, blog_slug) 
 
 		page_data := pages_data[page_idx]
 		page_idx := page_idx + 1
-		if page_data["nav_hide"] {
-			continue
+			if page_data["nav_hide"] {
+				continue
+			}
+			page_path := route_to_path(page_data["route"])
+			page_label := trim(to_string(page_data["nav_title"]))
+			if len(page_label) == 0 {
+				page_label = page_data["title"]
+			}
+			html = html + navigation_item(page_path, page_label, page_path == current_path)
 		}
-		page_path := route_to_path(page_data["route"])
-		html = html + navigation_item(page_path, page_data["title"], page_path == current_path)
-	}
 
 	collection_idx := 0
 	loop {
@@ -3164,10 +3288,11 @@ func build_site(settings) {
 		page_categories := meta_terms(meta, "categories", categories_lookup)
 		page_tags := meta_terms(meta, "tags", tags_lookup)
 		page_custom_taxonomies_html := custom_taxonomies_html(meta, "pages", taxonomy_lookups, reserved_taxonomy_slots, has_custom_tax_lookups)
-		pages_data = push(pages_data, {
-			"title": title,
-			"slug": slug,
-			"route": slug + "/",
+			pages_data = push(pages_data, {
+				"title": title,
+				"nav_title": trim(to_string(meta["nav_title"])),
+				"slug": slug,
+				"route": slug + "/",
 			"source_file": page_file,
 			"description": description,
 			"keywords": keywords,
@@ -3181,11 +3306,22 @@ func build_site(settings) {
 			"tags": page_tags,
 			"taxonomies_html": page_custom_taxonomies_html,
 			"body": parsed["body"],
-			"template": trim(to_string(meta["template"])),
-			"nav_hide": parse_bool_value(meta["nav_hide"], false),
-			"date": trim(to_string(meta["date"]))
-		})
-	}
+				"template": trim(to_string(meta["template"])),
+				"nav_hide": parse_bool_value(meta["nav_hide"], false),
+				"date": trim(to_string(meta["date"])),
+				"section": trim(to_string(meta["section"])),
+				"audience": trim(to_string(meta["audience"])),
+				"difficulty": trim(to_string(meta["difficulty"])),
+				"status": trim(to_string(meta["status"])),
+				"version": trim(to_string(meta["version"])),
+				"prerequisites": meta["prerequisites"],
+				"previous": trim(to_string(meta["previous"])),
+				"next": trim(to_string(meta["next"])),
+				"last_updated": trim(to_string(meta["last_updated"])),
+				"search_exclude": parse_bool_value(meta["search_exclude"], false),
+				"order": parse_int_value(meta["order"], 1000)
+			})
+		}
 
 	# Sitemap is built incrementally as a string (O(n)) instead of accumulating
 	# a routes array (O(n^2) under copy-on-write).
@@ -3236,19 +3372,43 @@ func build_site(settings) {
 				selected_page_template := read_file(custom_page_template)
 			}
 		}
-		processed_page_featured_image := process_featured_image_path(page_data["featured_image"], page_data["source_file"], settings)
-		page_featured_image_url := resolve_media_url(processed_page_featured_image, route_prefix(page_data["route"]))
+			processed_page_featured_image := process_featured_image_path(page_data["featured_image"], page_data["source_file"], settings)
+			page_featured_image_url := resolve_media_url(processed_page_featured_image, route_prefix(page_data["route"]))
+			page_navigation := build_navigation(pages_data, custom_collections, page_data["route"], settings["blog_slug"])
 
-		page_inner := apply_template(selected_page_template, {
-			"title": page_data["title"],
-			"featured_image_html": featured_image_html_tag(page_featured_image_url, page_data["title"]),
-			"categories_html": taxonomy_terms_html(page_data["categories"]),
-			"tags_html": taxonomy_terms_html(page_data["tags"]),
-			"taxonomies_html": page_data["taxonomies_html"],
-			"body": markdown_to_html(page_data["body"])
-		})
-		page_navigation := build_navigation(pages_data, custom_collections, page_data["route"], settings["blog_slug"])
-		page_html := render_layout(
+			page_body_html := docs_body_html(page_data["body"])
+			page_meta_for_docs := {
+				"section": page_data["section"],
+				"audience": page_data["audience"],
+				"difficulty": page_data["difficulty"],
+				"status": page_data["status"],
+				"version": page_data["version"],
+				"last_updated": page_data["last_updated"],
+				"date": page_data["date"]
+			}
+			page_inner := apply_template(selected_page_template, {
+				"title": page_data["title"],
+				"description": page_data["description"],
+				"section": page_data["section"],
+				"audience": page_data["audience"],
+				"difficulty": page_data["difficulty"],
+				"status": page_data["status"],
+				"version": page_data["version"],
+				"last_updated": page_data["last_updated"],
+				"prerequisites_html": docs_list_html(page_data["prerequisites"], "docs-prerequisites-list"),
+				"docs_meta_html": docs_meta_html(page_meta_for_docs),
+				"toc": docs_toc_html(page_data["body"]),
+				"previous": page_data["previous"],
+				"next": page_data["next"],
+				"prev_next_html": docs_prev_next_html(page_data["previous"], page_data["next"]),
+				"navigation": page_navigation,
+				"featured_image_html": featured_image_html_tag(page_featured_image_url, page_data["title"]),
+				"categories_html": taxonomy_terms_html(page_data["categories"]),
+				"tags_html": taxonomy_terms_html(page_data["tags"]),
+				"taxonomies_html": page_data["taxonomies_html"],
+				"body": page_body_html
+			})
+			page_html := render_layout(
 			layout_template,
 			settings,
 			page_data["route"],
@@ -3371,26 +3531,50 @@ func build_site(settings) {
 			if path_exists(custom_post_template) {
 				selected_post_template := read_file(custom_post_template)
 			}
-		}
-		post_featured_image_url := resolve_media_url(featured_image, route_prefix(route))
+			}
+			post_featured_image_url := resolve_media_url(featured_image, route_prefix(route))
+			post_navigation := build_navigation(pages_data, custom_collections, route, settings["blog_slug"])
+			post_body_html := docs_body_html(parsed["body"])
+			post_meta_for_docs := {
+				"section": trim(to_string(meta["section"])),
+				"audience": trim(to_string(meta["audience"])),
+				"difficulty": trim(to_string(meta["difficulty"])),
+				"status": trim(to_string(meta["status"])),
+				"version": trim(to_string(meta["version"])),
+				"last_updated": trim(to_string(meta["last_updated"])),
+				"date": post_date_raw
+			}
 
-		post_inner := apply_template(selected_post_template, {
-			"title": title,
-			"author": author_name,
-			"date": post_date_display,
-			"category": category_text,
-			"categories": join(categories, ", "),
+			post_inner := apply_template(selected_post_template, {
+				"title": title,
+				"description": description,
+				"author": author_name,
+				"date": post_date_display,
+				"section": trim(to_string(meta["section"])),
+				"audience": trim(to_string(meta["audience"])),
+				"difficulty": trim(to_string(meta["difficulty"])),
+				"status": trim(to_string(meta["status"])),
+				"version": trim(to_string(meta["version"])),
+				"last_updated": trim(to_string(meta["last_updated"])),
+				"prerequisites_html": docs_list_html(meta["prerequisites"], "docs-prerequisites-list"),
+				"docs_meta_html": docs_meta_html(post_meta_for_docs),
+				"toc": docs_toc_html(parsed["body"]),
+				"previous": trim(to_string(meta["previous"])),
+				"next": trim(to_string(meta["next"])),
+				"prev_next_html": docs_prev_next_html(meta["previous"], meta["next"]),
+				"navigation": post_navigation,
+				"category": category_text,
+				"categories": join(categories, ", "),
 			"categories_html": taxonomy_terms_html(categories),
 			"tags": join(tags, ", "),
 			"tags_html": taxonomy_terms_html(tags),
 			"colors_html": taxonomy_terms_html(color_terms),
-			"taxonomies_html": post_custom_taxonomies_html,
-			"featured_image_html": featured_image_html_tag(post_featured_image_url, title),
-			"body": markdown_to_html(parsed["body"])
-		})
+				"taxonomies_html": post_custom_taxonomies_html,
+				"featured_image_html": featured_image_html_tag(post_featured_image_url, title),
+				"body": post_body_html
+			})
 
-		post_navigation := build_navigation(pages_data, custom_collections, route, settings["blog_slug"])
-		post_html := render_layout(
+			post_html := render_layout(
 			layout_template,
 			settings,
 			route,
@@ -3589,28 +3773,52 @@ func build_site(settings) {
 				if path_exists(custom_collection_template) {
 					selected_collection_template := read_file(custom_collection_template)
 				}
-			}
-			item_featured_image_url := resolve_media_url(featured_image, route_prefix(route))
+				}
+				item_featured_image_url := resolve_media_url(featured_image, route_prefix(route))
+				item_navigation := build_navigation(pages_data, custom_collections, route, settings["blog_slug"])
+				item_body_html := docs_body_html(parsed["body"])
+				item_meta_for_docs := {
+					"section": trim(to_string(meta["section"])),
+					"audience": trim(to_string(meta["audience"])),
+					"difficulty": trim(to_string(meta["difficulty"])),
+					"status": trim(to_string(meta["status"])),
+					"version": trim(to_string(meta["version"])),
+					"last_updated": trim(to_string(meta["last_updated"])),
+					"date": item_date_raw
+				}
 
-			item_inner := apply_template(selected_collection_template, {
-				"title": title,
-				"author": resolve_lookup(meta["author"], authors_lookup, "Unknown Author"),
-				"date": item_date_display,
-				"category": item_category_text,
-				"categories": join(item_categories, ", "),
+				item_inner := apply_template(selected_collection_template, {
+					"title": title,
+					"description": description,
+					"author": resolve_lookup(meta["author"], authors_lookup, "Unknown Author"),
+					"date": item_date_display,
+					"section": trim(to_string(meta["section"])),
+					"audience": trim(to_string(meta["audience"])),
+					"difficulty": trim(to_string(meta["difficulty"])),
+					"status": trim(to_string(meta["status"])),
+					"version": trim(to_string(meta["version"])),
+					"last_updated": trim(to_string(meta["last_updated"])),
+					"prerequisites_html": docs_list_html(meta["prerequisites"], "docs-prerequisites-list"),
+					"docs_meta_html": docs_meta_html(item_meta_for_docs),
+					"toc": docs_toc_html(parsed["body"]),
+					"previous": trim(to_string(meta["previous"])),
+					"next": trim(to_string(meta["next"])),
+					"prev_next_html": docs_prev_next_html(meta["previous"], meta["next"]),
+					"navigation": item_navigation,
+					"category": item_category_text,
+					"categories": join(item_categories, ", "),
 				"categories_html": taxonomy_terms_html(item_categories),
 				"tags": join(tags, ", "),
 				"tags_html": taxonomy_terms_html(tags),
 				"colors_html": taxonomy_terms_html(color_terms),
 				"locations_html": taxonomy_terms_html(location_terms),
-				"taxonomies_html": item_custom_taxonomies_html,
-				"featured_image_html": featured_image_html_tag(item_featured_image_url, title),
-				"body": markdown_to_html(parsed["body"])
-			})
-			item_author_name := resolve_lookup(meta["author"], authors_lookup, "Unknown Author")
+					"taxonomies_html": item_custom_taxonomies_html,
+					"featured_image_html": featured_image_html_tag(item_featured_image_url, title),
+					"body": item_body_html
+				})
+				item_author_name := resolve_lookup(meta["author"], authors_lookup, "Unknown Author")
 
-			item_navigation := build_navigation(pages_data, custom_collections, route, settings["blog_slug"])
-			item_html := render_layout(
+				item_html := render_layout(
 				layout_template,
 				settings,
 				route,
