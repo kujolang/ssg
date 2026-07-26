@@ -1,6 +1,6 @@
 ---
 title: Five-minute Quickstart
-description: Build confidence with a short complete path.
+description: Create a Kujo project, run it, and check the source with the core CLI.
 custom_url: five-minute-quickstart
 template: docs
 section: Tutorials
@@ -11,29 +11,53 @@ estimated_time: 5 minutes
 status: stable
 version: current
 prerequisites:
-  - Local checkout
   - Kujo CLI on PATH
+  - Terminal in a writable workspace
 previous: /overview/
 next: /guides/update-generated-reference/
-tags: [quickstart]
+tags: [quickstart, cli]
 ---
 
 # Five-minute Quickstart
 
-This tutorial should produce a visible, verifiable result quickly.
+Start with the CLI and one generated project.
 
-## Run A Build
-
-```bash
-kujo run ./build.kujo -- --site-url https://docs.example.com
-```
-
-## Verify The Output
+## Check The CLI
 
 ```bash
-bash scripts/validate-generated-output.sh output
+kujo --version
+kujo --help
 ```
 
-## Expected Result
+## Create A Project
 
-The `output/` directory contains static HTML, metadata, sitemap, robots, feed, and `llms.txt` artifacts.
+```bash
+mkdir hello-kujo
+cd hello-kujo
+kujo init --name hello-kujo
+```
+
+The project now has a package manifest and an entry point:
+
+```text
+kujo.toml
+src/main.kujo
+```
+
+## Run The Program
+
+```bash
+kujo run src/main.kujo
+```
+
+## Validate While You Work
+
+```bash
+kujo check src/main.kujo
+kujo format src/main.kujo
+kujo lint src/main.kujo
+```
+
+## Next Step
+
+Use the toolchain guide when you want to run tests, add packages, preview a static output directory, or generate source reference docs.

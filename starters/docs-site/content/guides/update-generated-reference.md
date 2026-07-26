@@ -1,40 +1,60 @@
 ---
-title: Update Generated Reference
-description: Refresh DocGen content and rebuild the docs site deterministically.
+title: Use The Kujo Toolchain
+description: Map everyday development tasks to the first-party Kujo CLI commands.
 custom_url: update-generated-reference
 template: docs
 section: Guides
+nav_title: Toolchain
 order: 10
-audience: maintainer
-difficulty: intermediate
+audience: developer
+difficulty: beginner
 status: stable
 version: current
 prerequisites:
-  - Target repository checkout
   - Kujo CLI on PATH
 previous: /tutorials/five-minute-quickstart/
 next: /concepts/docs-pipeline/
-tags: [docgen, bridge, automation]
+tags: [cli, tooling]
 ---
 
-# Update Generated Reference
+# Use The Kujo Toolchain
 
-Run the update command from the docs site root.
+Most daily work starts with the top-level `kujo` command.
 
-## Command
+## Run And Check Source
 
 ```bash
-kujo run scripts/update_docs.kujo -- \
-	--target-repo /path/to/repo \
-	--site-url https://docs.example.com \
-	--source-link-template 'https://github.com/org/repo/blob/main/{path}#L{line}' \
-	--strict
+kujo run src/main.kujo
+kujo check src/main.kujo
+kujo run --interpreter src/main.kujo
 ```
 
-## What Changes
+## Format, Lint, And Test
 
-The command runs DocGen with an incremental cache, converts the payload into reviewable Markdown, refreshes the local search index, builds the site, and validates generated output.
+```bash
+kujo format src/main.kujo
+kujo lint src/main.kujo
+kujo test
+kujo test-run
+```
 
-## Review
+## Manage Packages
 
-Review generated Markdown diffs before publishing. Hand-authored narrative pages should stay outside `content/reference/generated/`.
+```bash
+kujo init --name my-tool
+kujo package-add package-name
+kujo package-install
+kujo package-install --frozen
+```
+
+## Generate Documentation
+
+```bash
+kujo docgen /path/to/repo \
+  --format json \
+  --search-index \
+  --source-links \
+  --out-dir docs/generated
+```
+
+The reusable docs starter wraps that DocGen payload with `scripts/update_docs.kujo`, converts symbols into Markdown, refreshes local search, builds the SSG output, and validates the static site.

@@ -1,11 +1,11 @@
 ---
-title: Template Release Notes
-description: Example update entry for a docs site.
+title: Kujo Docs Preview Notes
+description: Notes for the reusable docs starter running against Kujo source.
 date: 2026-07-26
 order: 10
-tags: [release]
+tags: [release, docs]
 ---
 
-# Template Release Notes
+# Kujo Docs Preview Notes
 
-Use update posts for meaningful documentation changes, migrations, and release notes.
+This starter is configured as a Kujo documentation preview: authored onboarding pages, generated reference hooks, local search, and static output validation all live in one repeatable package.

@@ -1,34 +1,41 @@
 ---
-title: Minimal Docs Site
-description: The smallest useful structure for a reusable docs project.
+title: Minimal Kujo Project
+description: The smallest useful project shape for learning and documenting Kujo.
 custom_url: minimal-docs-site
 template: docs
 section: Examples
+nav_title: Minimal Project
 order: 10
-audience: maintainer
+audience: beginner
 difficulty: beginner
 status: stable
 version: current
 previous: /operations/release-docs/
-tags: [example, starter]
+tags: [example, project]
 ---
 
-# Minimal Docs Site
+# Minimal Kujo Project
 
-A small docs site should still include clear structure.
+A small project still gives you the same CLI loop as a larger one.
 
 ## Files
 
 ```text
-content/pages/start-here.md
-content/tutorials/five-minute-quickstart.md
-content/guides/update-generated-reference.md
-content/concepts/docs-pipeline.md
-content/reference/generated/
-templates/
-assets/
+kujo.toml
+src/main.kujo
+tests/
+docs/
 ```
 
-## Rule
+## Commands
 
-Keep generated reference separate from human-authored learning material.
+```bash
+kujo run src/main.kujo
+kujo check src/main.kujo
+kujo test
+kujo docgen . --format json --search-index
+```
+
+## Rule Of Thumb
+
+Keep source, tests, and generated docs easy to inspect. The more the repo can explain itself locally, the easier it is for both humans and agents to maintain it.

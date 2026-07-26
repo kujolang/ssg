@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: Explain what this product does, who it is for, and where to go next.
+description: Learn what Kujo is, how it runs code, and where the built-in tooling fits.
 custom_url: overview
 template: docs
 section: Start Here
@@ -12,21 +12,32 @@ status: stable
 version: current
 previous: /start-here/
 next: /tutorials/five-minute-quickstart/
-tags: [overview]
+tags: [overview, runtime, tooling]
 ---
 
 # Overview
 
-Replace this page with the official product overview.
+Kujo is designed as a practical language and toolchain rather than a loose collection of scripts. The default execution path is the VM:
 
-## Audience
+```bash
+kujo run app.kujo
+```
 
-Name the primary readers and the experience level you expect from them.
+The interpreter remains available when you need a debugging or compatibility path:
 
-## Outcome
+```bash
+kujo run --interpreter app.kujo
+```
 
-State the useful result a reader can reach after following the beginner path.
+## Core Shape
 
-## Next Step
+- **Runtime:** VM-first execution, optional interpreter fallback, and experimental JIT support for compatible bytecode surfaces.
+- **Projects:** `kujo init` creates `kujo.toml` plus `src/main.kujo`.
+- **Quality loop:** `kujo check`, `kujo format`, `kujo lint`, and test commands keep source reviewable.
+- **Packages:** `kujo package-add`, `kujo package-install`, and `kujo package-install --frozen` support deterministic dependency workflows.
+- **Editor support:** LSP commands power completion, definition, references, hover, diagnostics, rename, and code actions.
+- **Documentation:** `kujo docgen` scans source and emits structured docs that this SSG template can publish.
 
-Continue to the quickstart when you are ready to run the first complete example.
+## Why This Site Exists
+
+This docs site combines hand-authored learning paths with generated reference material. The hand-authored pages teach intent and workflow. The generated reference reflects the current source tree. Together, they make the docs useful for a new reader and maintainable for a fast-moving codebase.

@@ -1,6 +1,6 @@
-site_url: https://docs.example.com
-site_title: Kujo Docs Template
-site_tagline: Local-first documentation with generated reference content.
+site_url: https://docs.kujo.dev
+site_title: Kujo Docs
+site_tagline: Learn Kujo, run real programs, and keep reference docs generated from source.
 
 output: output
 content: content

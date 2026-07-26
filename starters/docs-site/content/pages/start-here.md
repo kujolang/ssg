@@ -1,6 +1,6 @@
 ---
 title: Start Here
-description: Choose the right path through this documentation set.
+description: The shortest path from a fresh checkout to running Kujo code.
 custom_url: start-here
 template: docs
 section: Start Here
@@ -11,24 +11,24 @@ difficulty: beginner
 status: stable
 version: current
 next: /overview/
-tags: [orientation, docs]
+tags: [orientation, kujo]
 ---
 
 # Start Here
 
-Use this page as the front door for new readers.
+Kujo is a modern programming language with a VM-first runtime, an interpreter fallback, project tooling, package workflows, LSP surfaces, and DocGen built into the same command-line experience.
 
-## Recommended Path
+## First Path
 
-1. Read the overview.
-2. Install the toolchain.
-3. Complete the quickstart.
-4. Use guides for specific tasks.
-5. Use reference pages for exact behavior.
+1. Install or build the `kujo` CLI.
+2. Initialize a project with `kujo init`.
+3. Run the generated entry point with `kujo run`.
+4. Use `kujo check`, `kujo format`, and `kujo lint` while you edit.
+5. Generate reference docs with `kujo docgen` when the source changes.
 
-## Documentation Areas
+## What To Read
 
-- Tutorials teach through a complete guided path.
-- Guides solve focused implementation tasks.
-- Concepts explain design decisions and tradeoffs.
-- Reference pages document exact commands, fields, APIs, and generated output.
+- **Overview** explains how the language, runtime, tooling, packages, and docs fit together.
+- **Five-minute quickstart** gets a small project running.
+- **Use the Kujo toolchain** maps common tasks to CLI commands.
+- **Generated reference** is rebuilt from source so symbol-level docs stay current.

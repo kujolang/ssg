@@ -542,11 +542,76 @@ func inline_markdown(text) {
 	return out
 }
 
+func fenced_code_paragraph_text(line) {
+	clean := trim(line)
+	if starts_with(clean, "<p>") && ends_with(clean, "</p>") && len(clean) >= 7 {
+		return substring(clean, 3, len(clean) - 4)
+	}
+	return line
+}
+
+func fenced_code_block_html(language, code_lines) {
+	class_attr := ""
+	language_slug := clean_slug(language)
+	if len(language_slug) > 0 && language_slug != "untitled" {
+		class_attr = " class=\"language-" + html_escape(language_slug) + "\""
+	}
+	return "<pre><code" + class_attr + ">" + join(code_lines, "\n") + "</code></pre>"
+}
+
+func normalize_fenced_code_html(html) {
+	if index_of(html, "```") < 0 {
+		return html
+	}
+
+	lines := split(html, "\n")
+	out := []
+	code_lines := []
+	in_code := false
+	code_language := ""
+	i := 0
+	loop {
+		if i >= len(lines) {
+			break
+		}
+
+		line := lines[i]
+		i := i + 1
+		paragraph_text := trim(fenced_code_paragraph_text(line))
+		if starts_with(paragraph_text, "```") {
+			if in_code {
+				out = push(out, fenced_code_block_html(code_language, code_lines))
+				code_lines := []
+				code_language := ""
+				in_code := false
+			} else {
+				code_language = trim(substring(paragraph_text, 3, len(paragraph_text)))
+				code_lines := []
+				in_code := true
+			}
+			continue
+		}
+
+		if in_code {
+			code_lines = push(code_lines, fenced_code_paragraph_text(line))
+		} else {
+			out = push(out, line)
+		}
+	}
+
+	if in_code {
+		out = push(out, fenced_code_block_html(code_language, code_lines))
+	}
+
+	return join(out, "\n")
+}
+
 # Delegates to the native markdown renderer (compiled once, byte-identical to
-# the previous interpreted implementation). The Kujo block/inline logic is
-# preserved in render_markdown_native in the runtime.
+# the previous interpreted implementation). Fenced code blocks are normalized
+# afterward because the native renderer intentionally preserves the legacy
+# paragraph behavior for triple-backtick lines.
 func markdown_to_html(markdown) {
-	return render_markdown(markdown)
+	return normalize_fenced_code_html(render_markdown(markdown))
 }
 
 func excerpt_from_markdown(markdown) {

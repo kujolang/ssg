@@ -1,11 +1,12 @@
 ---
-title: Documentation Pipeline
-description: How authored docs, generated reference, search, and static output fit together.
+title: Runtime And Docs Model
+description: How Kujo execution, project tooling, generated reference, and the SSG work together.
 custom_url: docs-pipeline
 template: docs
 section: Concepts
+nav_title: Runtime + Docs
 order: 10
-audience: maintainer
+audience: developer
 difficulty: intermediate
 status: stable
 version: current
@@ -14,21 +15,24 @@ next: /operations/release-docs/
 tags: [architecture, pipeline]
 ---
 
-# Documentation Pipeline
+# Runtime And Docs Model
 
-The docs site is built from two sources: human-authored Markdown and generated DocGen reference Markdown.
+Kujo documentation should explain the language and stay synchronized with the implementation. This template does that by keeping tutorial content and generated reference content separate.
 
-## Source Inputs
+## Runtime Layers
+
+- `kujo run` executes scripts on the VM by default.
+- `kujo run --interpreter` uses the tree-walking interpreter for fallback and debugging.
+- `kujo run --jit` opts into experimental JIT execution where supported.
+- `kujo check` validates source without executing it.
+
+## Documentation Layers
 
 - Authored pages live under `content/`.
-- Generated reference lives under `content/reference/generated/`.
+- Generated symbol reference lives under `content/reference/generated/`.
 - Templates live under `templates/`.
-- Local assets live under `assets/`.
+- Search data is generated into `assets/js/search-index.json`.
 
-## Determinism
+## Update Loop
 
-Stable source content should produce stable routes, search records, generated Markdown, and validation results. Generated files are tracked by manifest so removed symbols can remove stale pages without touching hand-authored content.
-
-## Local-first Operation
-
-The default path uses local files and a local cache. Network access is only needed when you intentionally use remote assets or external link validation.
+The docs workflow is designed to be rerun as Kujo changes. DocGen reads the source tree, the bridge turns changed symbols into Markdown, stale generated pages are removed by manifest, and the SSG rebuilds a static site from the current inputs.

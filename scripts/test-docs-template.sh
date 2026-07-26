@@ -38,7 +38,9 @@ main() {
 	assert_path_exists output/reference/index.html
 	assert_file_contains output/start-here/index.html 'class="docs-shell"'
 	assert_file_contains output/start-here/index.html 'class="docs-meta"'
-	assert_file_contains output/start-here/index.html 'href="#recommended-path"'
+	assert_file_contains output/start-here/index.html 'href="#first-path"'
+	assert_file_contains output/tutorials/five-minute-quickstart/index.html '<pre><code class="language-bash">'
+	assert_file_not_contains output/tutorials/five-minute-quickstart/index.html '```bash'
 	assert_file_contains output/assets/js/docs-search-index.json '"title": "Start Here"'
 	bash scripts/validate-generated-output.sh output
 
