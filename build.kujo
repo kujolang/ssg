@@ -237,37 +237,9 @@ func ensure_dir(path) {
 		return null
 	}
 
-	parts := split(clean_path, "/")
-	# Preserve a leading "/" so absolute paths (e.g. an absolute --output) are
-	# built from the filesystem root instead of being silently rewritten relative
-	# to the current working directory.
-	current := ""
-	if starts_with(clean_path, "/") {
-		current := "/"
-	}
-	part_idx := 0
-	loop {
-		if part_idx >= len(parts) {
-			break
-		}
-
-		part := parts[part_idx]
-		part_idx := part_idx + 1
-		segment := trim(part)
-		if len(segment) == 0 {
-			continue
-		}
-		if len(current) == 0 {
-			current := segment
-		} else if current == "/" {
-			current := "/" + segment
-		} else {
-			current := path_join(current, segment)
-		}
-		if !path_exists(current) {
-			create_dir(current)
-		}
-	}
+	# create_dir is recursive (create_dir_all at the runtime boundary), so a
+	# single call avoids repeated interpreter loop frames for large docs sites.
+	create_dir(clean_path)
 }
 
 func ensure_dirs(paths) {
