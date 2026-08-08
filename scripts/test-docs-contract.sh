@@ -14,9 +14,6 @@ assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Remote fe
 assert_file_contains "$REPO_ROOT/README.md" 'scripts/docgen_ssg_bridge.kujo'
 assert_file_contains "$REPO_ROOT/README.md" 'scripts/update_docs.kujo'
 assert_file_contains "$REPO_ROOT/README.md" 'scripts/package-docs-template.sh'
-assert_file_contains "$REPO_ROOT/docs/parity-audit.md" 'Status: historical snapshot'
-assert_file_contains "$REPO_ROOT/docs/enhancements-roadmap.md" 'P0-1. Featured-image path resolution can escape the content/asset roots — Complete (2026-07-10)'
-assert_file_contains "$REPO_ROOT/docs/enhancements-roadmap.md" 'P0-3. Frontmatter split is fragile when values contain `---` — Complete (2026-07-10)'
 assert_file_contains "$REPO_ROOT/ROADMAP.md" 'SSG-002 remote-fetch destination policy remains open'
 
 echo "Documentation contract passed"

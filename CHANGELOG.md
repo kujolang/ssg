@@ -8,7 +8,7 @@
 ### Documentation
 - Aligned the README version badge with the current documented SSG version.
 
-## 1.2.0
+## 1.0.0 - 2026-08-08
 
 ### Added
 - `--drafts` flag (and `drafts:` config key) to include `draft: true` content in a

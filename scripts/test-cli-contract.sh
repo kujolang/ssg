@@ -235,7 +235,7 @@ main() {
 	assert_output_contains "Usage: kujo run ./build.kujo [options]"
 
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --version
-	assert_output_contains "build.kujo 1.2.0"
+	assert_output_contains "build.kujo 1.0.0"
 
 	setup_cli_contract_site "$temp_dir"
 	pushd "$temp_dir" >/dev/null

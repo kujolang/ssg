@@ -1,6 +1,6 @@
 name: "SSG launch readiness review"
 goal: "Keep SSG locally release-ready as a deterministic Kujo-native static-site showcase with local build, validation, and release gates."
-version: "1.2.0"
+version: "1.0.0"
 background: "SSG is part of the Kujo prelaunch matrix. The verified scope is local static-site generation from committed fixtures, generated-output validation, CLI contracts, and release-gate automation; it does not deploy or publish sites."
 scope: "Repository-local build behavior, generated output contracts, config precedence, DocGen bridge smoke coverage, release gate scripts, documentation truthfulness, and launch evidence capture."
 non_goals:

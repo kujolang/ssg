@@ -1,6 +1,6 @@
 {
   "name": "ssg-launch-readiness",
-  "version": "1.2.0",
+  "version": "1.0.0",
   "tests": [
     {
       "name": "Builder help succeeds",

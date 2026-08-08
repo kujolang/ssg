@@ -1,7 +1,7 @@
 # Kujo Static Site Generator
 # Native Kujo implementation with full parity-focused feature set.
 
-VERSION := "1.2.0"
+VERSION := "1.0.0"
 
 func print_lines(lines) {
 	i := 0
