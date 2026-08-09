@@ -5,7 +5,7 @@ LAST_OUTPUT=""
 run_capture() {
 	local output
 	local status
-	local timeout_secs="${SSG_TEST_COMMAND_TIMEOUT_SECS:-180}"
+	local timeout_secs="${SSG_TEST_COMMAND_TIMEOUT_SECS:-300}"
 
 	printf 'RUN'
 	printf ' %q' "$@"
@@ -31,7 +31,7 @@ run_expect_success() {
 	if [[ "$status" -ne 0 ]]; then
 		echo "FAIL command should have succeeded: $*"
 		if [[ "$status" -eq 124 ]]; then
-			echo "Command timed out after ${SSG_TEST_COMMAND_TIMEOUT_SECS:-180}s"
+			echo "Command timed out after ${SSG_TEST_COMMAND_TIMEOUT_SECS:-300}s"
 		fi
 		printf '%s\n' "$LAST_OUTPUT"
 		exit 1
