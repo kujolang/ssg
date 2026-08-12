@@ -755,6 +755,59 @@ func html_escape(value) {
 	return escape_xml(value)
 }
 
+func template_text(value) {
+	return html_escape(to_string(value))
+}
+
+func normalize_lang(value) {
+	lang := to_lower(trim(to_string(value)))
+	lang = replace(lang, "_", "-")
+	lang = regex_replace(lang, "[^a-z0-9-]", "")
+	lang = regex_replace(lang, "^-+|-+$", "")
+	if len(lang) == 0 {
+		return "en"
+	}
+	return lang
+}
+
+# Resolve configured paths without requiring the final path to exist. The
+# nearest existing ancestor is canonicalized first so symlinks cannot hide an
+# output/source overlap; missing path components are then normalized in order.
+func absolute_config_path(value) {
+	cursor := trim(to_string(value))
+	missing := []
+	loop {
+		if path_exists(cursor) {
+			break
+		}
+		parent := dirname(cursor)
+		if parent == cursor {
+			return path_absolute(cursor)
+		}
+		missing = push(missing, basename(cursor))
+		cursor = parent
+	}
+
+	resolved := path_absolute(cursor)
+	i := len(missing) - 1
+	loop {
+		if i < 0 {
+			break
+		}
+		part := missing[i]
+		i = i - 1
+		if len(part) == 0 || part == "." {
+			continue
+		}
+		if part == ".." {
+			resolved = dirname(resolved)
+		} else {
+			resolved = path_join(resolved, part)
+		}
+	}
+	return resolved
+}
+
 func route_to_path(route) {
 	clean := normalize_route(route)
 	if len(clean) == 0 {
@@ -2504,7 +2557,15 @@ func parse_post_date(raw) {
 		}
 	}
 
-	if year <= 0 || month < 1 || month > 12 || day < 1 || day > 31 {
+	if year <= 0 || month < 1 || month > 12 || day < 1 {
+		return invalid
+	}
+	days_in_month := [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+	is_leap_year := year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)
+	if is_leap_year {
+		days_in_month[1] = 29
+	}
+	if day > days_in_month[month - 1] {
 		return invalid
 	}
 
@@ -2596,17 +2657,40 @@ func pad_number(value, width) {
 	return s
 }
 
+func invert_decimal_digits(value) {
+	digits := to_string(value)
+	inverted := ""
+	i := 0
+	loop {
+		if i >= len(digits) {
+			break
+		}
+		digit := substring(digits, i, i + 1)
+		i := i + 1
+		position := index_of("0123456789", digit)
+		if position >= 0 {
+			inverted = inverted + substring("9876543210", position, position + 1)
+		}
+	}
+	return inverted
+}
+
 # Lexicographic sort prefix so a single native string sort yields the requested
 # order. Date is descending (newest first); title/author ascending; order asc.
 func post_sort_prefix(sort_by, date_sort_key, title, author, order) {
 	if sort_by == "title" {
-		return to_lower(title)
+		return regex_replace(to_lower(title), "[\\t\\r\\n]+", " ")
 	}
 	if sort_by == "author" {
-		return to_lower(author)
+		return regex_replace(to_lower(author), "[\\t\\r\\n]+", " ")
 	}
 	if sort_by == "order" {
-		return pad_number(order, 8)
+		if order < 0 {
+			magnitude := substring(to_string(order), 1, len(to_string(order)))
+			return "0" + pad_number(20 - len(magnitude), 2) + invert_decimal_digits(magnitude)
+		}
+		digits := to_string(order)
+		return "1" + pad_number(len(digits), 2) + digits
 	}
 	return pad_number(99999999 - date_sort_key, 8)
 }
@@ -2647,30 +2731,73 @@ func sitemap_url_entry(site_url, route, lastmod_iso, blog_prefix) {
 	return entry
 }
 
-# Parse a tab-delimited post index record back into a dict for rendering.
+func encode_post_record_field(value) {
+	encoded := to_string(value)
+	encoded = replace(encoded, "%", "%25")
+	encoded = replace(encoded, "\t", "%09")
+	encoded = replace(encoded, "\n", "%0A")
+	encoded = replace(encoded, "\r", "%0D")
+	encoded = replace(encoded, ",", "%2C")
+	return encoded
+}
+
+func decode_post_record_field(value) {
+	decoded := to_string(value)
+	decoded = replace(decoded, "%09", "\t")
+	decoded = replace(decoded, "%0A", "\n")
+	decoded = replace(decoded, "%0D", "\r")
+	decoded = replace(decoded, "%2C", ",")
+	decoded = replace(decoded, "%25", "%")
+	return decoded
+}
+
+func encode_post_record_tags(tags) {
+	encoded := []
+	i := 0
+	loop {
+		if i >= len(tags) {
+			break
+		}
+		encoded = push(encoded, encode_post_record_field(tags[i]))
+		i := i + 1
+	}
+	return join(encoded, ",")
+}
+
+# Parse an escaped tab-delimited post index record back into a dict.
 func parse_post_record(line) {
 	f := split(line, "\t")
 	record := {"route": "", "title": "", "excerpt": "", "featured_image": "", "tags": [], "date_rfc822": "", "date_iso": ""}
 	if len(f) > 1 {
-		record["route"] = f[1]
+		record["route"] = decode_post_record_field(f[1])
 	}
 	if len(f) > 2 {
-		record["title"] = f[2]
+		record["title"] = decode_post_record_field(f[2])
 	}
 	if len(f) > 3 {
-		record["excerpt"] = f[3]
+		record["excerpt"] = decode_post_record_field(f[3])
 	}
 	if len(f) > 4 {
-		record["featured_image"] = f[4]
+		record["featured_image"] = decode_post_record_field(f[4])
 	}
 	if len(f) > 5 && len(f[5]) > 0 {
-		record["tags"] = split(f[5], ",")
+		encoded_tags := split(f[5], ",")
+		tags := []
+		i := 0
+		loop {
+			if i >= len(encoded_tags) {
+				break
+			}
+			tags = push(tags, decode_post_record_field(encoded_tags[i]))
+			i := i + 1
+		}
+		record["tags"] = tags
 	}
 	if len(f) > 6 {
-		record["date_rfc822"] = f[6]
+		record["date_rfc822"] = decode_post_record_field(f[6])
 	}
 	if len(f) > 7 {
-		record["date_iso"] = f[7]
+		record["date_iso"] = decode_post_record_field(f[7])
 	}
 	return record
 }
@@ -2978,7 +3105,18 @@ func normalize_settings(settings) {
 	settings["site_title"] = trim(to_string(settings["site_title"]))
 	settings["site_tagline"] = trim(to_string(settings["site_tagline"]))
 	settings["site_url"] = trim(to_string(settings["site_url"]))
-	settings["blog_slug"] = clean_slug(to_string(settings["blog_slug"]))
+	loop {
+		if !ends_with(settings["site_url"], "/") || ends_with(settings["site_url"], "://") {
+			break
+		}
+		settings["site_url"] = substring(settings["site_url"], 0, len(settings["site_url"]) - 1)
+	}
+	raw_blog_slug := trim(to_string(settings["blog_slug"]))
+	if len(raw_blog_slug) == 0 {
+		settings["blog_slug"] = ""
+	} else {
+		settings["blog_slug"] = clean_slug(raw_blog_slug)
+	}
 
 	raw_posts_per_page := settings["posts_per_page"]
 	settings["posts_per_page"] = parse_int_value(raw_posts_per_page, 5)
@@ -3071,13 +3209,55 @@ func normalize_settings(settings) {
 		phase := "full"
 	}
 	settings["phase"] = phase
-	settings["shards"] = parse_int_value(settings["shards"], 1)
-	if settings["shards"] < 1 {
+	raw_shards := settings["shards"]
+	settings["shards"] = parse_int_value(raw_shards, 1)
+	if !is_integer_text(raw_shards) || settings["shards"] < 1 {
+		result["errors"] = push(result["errors"], "Invalid value for shards: " + to_string(raw_shards) + " (expected positive integer)")
 		settings["shards"] = 1
 	}
-	settings["shard"] = parse_int_value(settings["shard"], 0)
-	if settings["shard"] < 0 {
+	raw_shard := settings["shard"]
+	settings["shard"] = parse_int_value(raw_shard, 0)
+	if !is_integer_text(raw_shard) || settings["shard"] < 0 {
+		result["errors"] = push(result["errors"], "Invalid value for shard: " + to_string(raw_shard) + " (expected non-negative integer)")
 		settings["shard"] = 0
+	}
+	if settings["shard"] >= settings["shards"] {
+		result["errors"] = push(result["errors"], "Invalid shard index: " + to_string(settings["shard"]) + " (must be less than shards=" + to_string(settings["shards"]) + ")")
+	}
+
+	# The setup phase recursively deletes an existing output tree. Refuse every
+	# overlap with source trees, including the working directory and filesystem
+	# root, before any destructive build work begins.
+	try {
+			output_abs := absolute_config_path(settings["output"])
+			cwd_abs := path_absolute(os_getcwd())
+			if output_abs == cwd_abs || dirname(output_abs) == output_abs {
+				result["errors"] = push(result["errors"], "Unsafe output directory: " + settings["output"] + " (refusing to delete the working directory or filesystem root)")
+			}
+
+			source_paths := [settings["content"], settings["templates"], settings["assets"]]
+			source_idx := 0
+			loop {
+				if source_idx >= len(source_paths) {
+					break
+				}
+				source_path := source_paths[source_idx]
+				source_idx := source_idx + 1
+				source_abs := absolute_config_path(source_path)
+				output_prefix := output_abs
+				if !ends_with(output_prefix, "/") {
+					output_prefix = output_prefix + "/"
+				}
+				source_prefix := source_abs
+				if !ends_with(source_prefix, "/") {
+					source_prefix = source_prefix + "/"
+				}
+				if output_abs == source_abs || starts_with(source_abs, output_prefix) || starts_with(output_abs, source_prefix) {
+					result["errors"] = push(result["errors"], "Unsafe output directory: " + settings["output"] + " overlaps source directory " + source_path)
+				}
+			}
+	} except err {
+			result["errors"] = push(result["errors"], "Could not validate output directory " + settings["output"] + ": " + safe_error_text(err))
 	}
 
 	result["settings"] = settings
@@ -3315,10 +3495,7 @@ func build_site(settings) {
 		if len(seo_description) == 0 {
 			seo_description = description
 		}
-		lang := trim(to_string(meta["lang"]))
-		if len(lang) == 0 {
-			lang = "en"
-		}
+		lang := normalize_lang(meta["lang"])
 		canonical := trim(to_string(meta["canonical"]))
 		featured_image := trim(to_string(meta["featured_image"]))
 		author_name := resolve_lookup(meta["author"], authors_lookup, "")
@@ -3424,19 +3601,19 @@ func build_site(settings) {
 				"date": page_data["date"]
 			}
 			page_inner := apply_template(selected_page_template, {
-				"title": page_data["title"],
-				"description": page_data["description"],
-				"section": page_data["section"],
-				"audience": page_data["audience"],
-				"difficulty": page_data["difficulty"],
-				"status": page_data["status"],
-				"version": page_data["version"],
-				"last_updated": page_data["last_updated"],
+				"title": template_text(page_data["title"]),
+				"description": template_text(page_data["description"]),
+				"section": template_text(page_data["section"]),
+				"audience": template_text(page_data["audience"]),
+				"difficulty": template_text(page_data["difficulty"]),
+				"status": template_text(page_data["status"]),
+				"version": template_text(page_data["version"]),
+				"last_updated": template_text(page_data["last_updated"]),
 				"prerequisites_html": docs_list_html(page_data["prerequisites"], "docs-prerequisites-list"),
 				"docs_meta_html": docs_meta_html(page_meta_for_docs),
 				"toc": docs_toc_html(page_data["body"]),
-				"previous": page_data["previous"],
-				"next": page_data["next"],
+				"previous": template_text(page_data["previous"]),
+				"next": template_text(page_data["next"]),
 				"prev_next_html": docs_prev_next_html(page_data["previous"], page_data["next"]),
 				"navigation": page_navigation,
 				"featured_image_html": featured_image_html_tag(page_featured_image_url, page_data["title"]),
@@ -3472,7 +3649,7 @@ func build_site(settings) {
 		built_pages = push(built_pages, page_data)
 	}
 
-	# Posts accumulate as tab-delimited record lines streamed to a temp file
+	# Posts accumulate as escaped tab-delimited record lines streamed to a temp file
 	# (O(1) appends); the index is materialized once via read+split and ordered
 	# once via the native sort().
 	post_count := 0
@@ -3527,10 +3704,7 @@ func build_site(settings) {
 		if len(seo_description) == 0 {
 			seo_description = description
 		}
-		lang := trim(to_string(meta["lang"]))
-		if len(lang) == 0 {
-			lang = "en"
-		}
+		lang := normalize_lang(meta["lang"])
 		canonical := trim(to_string(meta["canonical"]))
 		featured_image := trim(to_string(meta["featured_image"]))
 		featured_image = process_featured_image_path(featured_image, post_file, settings)
@@ -3583,27 +3757,27 @@ func build_site(settings) {
 			}
 
 			post_inner := apply_template(selected_post_template, {
-				"title": title,
-				"description": description,
-				"author": author_name,
-				"date": post_date_display,
-				"section": trim(to_string(meta["section"])),
-				"audience": trim(to_string(meta["audience"])),
-				"difficulty": trim(to_string(meta["difficulty"])),
-				"status": trim(to_string(meta["status"])),
-				"version": trim(to_string(meta["version"])),
-				"last_updated": trim(to_string(meta["last_updated"])),
+				"title": template_text(title),
+				"description": template_text(description),
+				"author": template_text(author_name),
+				"date": template_text(post_date_display),
+				"section": template_text(meta["section"]),
+				"audience": template_text(meta["audience"]),
+				"difficulty": template_text(meta["difficulty"]),
+				"status": template_text(meta["status"]),
+				"version": template_text(meta["version"]),
+				"last_updated": template_text(meta["last_updated"]),
 				"prerequisites_html": docs_list_html(meta["prerequisites"], "docs-prerequisites-list"),
 				"docs_meta_html": docs_meta_html(post_meta_for_docs),
 				"toc": docs_toc_html(parsed["body"]),
-				"previous": trim(to_string(meta["previous"])),
-				"next": trim(to_string(meta["next"])),
+				"previous": template_text(meta["previous"]),
+				"next": template_text(meta["next"]),
 				"prev_next_html": docs_prev_next_html(meta["previous"], meta["next"]),
 				"navigation": post_navigation,
-				"category": category_text,
-				"categories": join(categories, ", "),
+				"category": template_text(category_text),
+				"categories": template_text(join(categories, ", ")),
 			"categories_html": taxonomy_terms_html(categories),
-			"tags": join(tags, ", "),
+			"tags": template_text(join(tags, ", ")),
 			"tags_html": taxonomy_terms_html(tags),
 			"colors_html": taxonomy_terms_html(color_terms),
 				"taxonomies_html": post_custom_taxonomies_html,
@@ -3645,7 +3819,7 @@ func build_site(settings) {
 
 		order_val := parse_int_value(meta["order"], 1000)
 		post_sort_key := post_sort_prefix(settings["sort_by"], post_date["sort_key"], title, author_name, order_val)
-		post_record := post_sort_key + "\t" + route + "\t" + title + "\t" + excerpt + "\t" + featured_image + "\t" + join(tags, ",") + "\t" + post_date["rfc822"] + "\t" + post_date["iso"]
+		post_record := post_sort_key + "\t" + encode_post_record_field(route) + "\t" + encode_post_record_field(title) + "\t" + encode_post_record_field(excerpt) + "\t" + encode_post_record_field(featured_image) + "\t" + encode_post_record_tags(tags) + "\t" + encode_post_record_field(post_date["rfc822"]) + "\t" + encode_post_record_field(post_date["iso"])
 		append_file(records_tmp, post_record + "\n")
 		post_count := post_count + 1
 	}
@@ -3768,10 +3942,7 @@ func build_site(settings) {
 			if len(seo_description) == 0 {
 				seo_description = description
 			}
-			lang := trim(to_string(meta["lang"]))
-			if len(lang) == 0 {
-				lang = "en"
-			}
+			lang := normalize_lang(meta["lang"])
 			canonical := trim(to_string(meta["canonical"]))
 			featured_image := trim(to_string(meta["featured_image"]))
 			featured_image = process_featured_image_path(featured_image, item_file, settings)
@@ -3825,27 +3996,27 @@ func build_site(settings) {
 				}
 
 				item_inner := apply_template(selected_collection_template, {
-					"title": title,
-					"description": description,
-					"author": resolve_lookup(meta["author"], authors_lookup, "Unknown Author"),
-					"date": item_date_display,
-					"section": trim(to_string(meta["section"])),
-					"audience": trim(to_string(meta["audience"])),
-					"difficulty": trim(to_string(meta["difficulty"])),
-					"status": trim(to_string(meta["status"])),
-					"version": trim(to_string(meta["version"])),
-					"last_updated": trim(to_string(meta["last_updated"])),
+					"title": template_text(title),
+					"description": template_text(description),
+					"author": template_text(resolve_lookup(meta["author"], authors_lookup, "Unknown Author")),
+					"date": template_text(item_date_display),
+					"section": template_text(meta["section"]),
+					"audience": template_text(meta["audience"]),
+					"difficulty": template_text(meta["difficulty"]),
+					"status": template_text(meta["status"]),
+					"version": template_text(meta["version"]),
+					"last_updated": template_text(meta["last_updated"]),
 					"prerequisites_html": docs_list_html(meta["prerequisites"], "docs-prerequisites-list"),
 					"docs_meta_html": docs_meta_html(item_meta_for_docs),
 					"toc": docs_toc_html(parsed["body"]),
-					"previous": trim(to_string(meta["previous"])),
-					"next": trim(to_string(meta["next"])),
+					"previous": template_text(meta["previous"]),
+					"next": template_text(meta["next"]),
 					"prev_next_html": docs_prev_next_html(meta["previous"], meta["next"]),
 					"navigation": item_navigation,
-					"category": item_category_text,
-					"categories": join(item_categories, ", "),
+					"category": template_text(item_category_text),
+					"categories": template_text(join(item_categories, ", ")),
 				"categories_html": taxonomy_terms_html(item_categories),
-				"tags": join(tags, ", "),
+				"tags": template_text(join(tags, ", ")),
 				"tags_html": taxonomy_terms_html(tags),
 				"colors_html": taxonomy_terms_html(color_terms),
 				"locations_html": taxonomy_terms_html(location_terms),
