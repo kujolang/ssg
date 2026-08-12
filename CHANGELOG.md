@@ -5,6 +5,13 @@
 ### Added
 - Added a launch-readiness Spec and deterministic Eval suite for the local SSG release review.
 
+### Fixed
+- Guarded destructive output cleanup against the filesystem root, working directory, and overlapping source trees.
+- Corrected calendar-date validation, repeated trailing slashes in `site_url`, empty blog slugs, and invalid shard indexes.
+- Replaced delimiter-fragile post index fields with escaped payloads so tabs, newlines, and comma-bearing tags remain intact.
+- Corrected numeric ordering for negative `order` values.
+- Escaped plain frontmatter template values and normalized `lang` metadata before HTML rendering.
+
 ### Documentation
 - Aligned the README version badge with the current documented SSG version.
 

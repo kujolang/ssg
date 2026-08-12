@@ -311,7 +311,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 
 ## CLI Flags
 
-- `--output <dir>`: output directory
+- `--output <dir>`: output directory. Existing output is deleted before a full/setup build, so paths that overlap the working directory or source content/templates/assets are rejected.
 - `--content <dir>`: content directory
 - `--templates <dir>`: templates directory
 - `--assets <dir>`: assets directory
@@ -327,7 +327,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--minify`: emit minified CSS/JS assets
 - `--download-remote-images`: mirror remote `featured_image` URLs into output (needs outbound network — see [Runtime Capabilities](#runtime-capabilities))
 - `--drafts`: include `draft: true` content in the build (preview/staging workflow); omitted by default
-- `--blog-slug <slug>`: blog route base
+- `--blog-slug <slug>`: blog route base. Set `blog_slug: ""` in config to omit the blog route and publish posts at the site root.
 - `--posts-at-root`: keep post permalinks at `/<slug>/` while retaining the blog listing under `/<blog_slug>/`
 - `--init <yml|yaml|json>`: scaffold starter config
 - `--no-index`: skip index and blog listing pages
@@ -337,6 +337,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--help`
 
 Unknown flags, missing option values, malformed YAML/JSON config, invalid booleans, and invalid enum values fail fast with a nonzero exit.
+Internal parallel-build shard values are also validated (`0 <= shard < shards`).
 
 ## Content Model
 

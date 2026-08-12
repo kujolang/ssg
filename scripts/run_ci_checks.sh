@@ -68,6 +68,7 @@ main() {
 	cd "$REPO_ROOT"
 	bash scripts/test-cli-contract.sh
 	bash scripts/test-generated-contract.sh
+	bash scripts/test-bug-regressions.sh
 	bash scripts/test-docgen-ssg-bridge.sh
 	bash scripts/test-docs-template.sh
 	bash scripts/test-docs-contract.sh
