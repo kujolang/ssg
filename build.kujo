@@ -43,6 +43,7 @@ func print_help() {
 		"  --minify                      Generate minified CSS/JS",
 		"  --download-remote-images      Download remote featured images",
 		"  --drafts                      Include draft content (preview builds)",
+		"  --webmcp                     Enable experimental static WebMCP tools",
 		"  --blog-slug <slug>            Blog root slug (default: blog)",
 		"  --posts-at-root               Keep post permalinks at /<slug>/",
 		"  --init <yml|yaml|json>        Bootstrap starter project",
@@ -74,6 +75,7 @@ func default_settings() {
 		"minify": false,
 		"download_remote_images": false,
 		"drafts": false,
+		"webmcp": false,
 		"blog_slug": "blog",
 		"posts_at_root": false,
 		"no_index": false,
@@ -966,6 +968,224 @@ func build_navigation(pages_data, custom_collections, current_route, blog_slug) 
 	return html
 }
 
+func public_navigation(settings, pages_data, custom_collections, content_type_counts) {
+	navigation := []
+	if !settings["no_index"] {
+		navigation = push(navigation, {"label": "Home", "url": public_route_url(settings["site_url"], "")})
+		blog_slug := clean_slug(trim(to_string(settings["blog_slug"])))
+		if blog_slug != "untitled" && has_key(content_type_counts, "posts") && content_type_counts["posts"] > 0 {
+			navigation = push(navigation, {"label": "Blog", "url": public_route_url(settings["site_url"], blog_slug + "/")})
+		}
+	}
+
+	page_idx := 0
+	loop {
+		if page_idx >= len(pages_data) {
+			break
+		}
+		page := pages_data[page_idx]
+		page_idx := page_idx + 1
+		if page["draft"] || page["nav_hide"] {
+			continue
+		}
+		label := trim(to_string(page["nav_title"]))
+		if len(label) == 0 {
+			label = page["title"]
+		}
+		navigation = push(navigation, {
+			"label": bounded_public_text(label, 160),
+			"url": public_route_url(settings["site_url"], page["route"])
+		})
+	}
+
+	collection_idx := 0
+	loop {
+		if collection_idx >= len(custom_collections) {
+			break
+		}
+		collection := custom_collections[collection_idx]
+		collection_idx := collection_idx + 1
+		content_type := collection["slug"]
+		if has_key(content_type_counts, content_type) {
+			if content_type_counts[content_type] <= 0 {
+				continue
+			}
+		} else {
+			continue
+		}
+		navigation = push(navigation, {
+			"label": bounded_public_text(collection["title"], 160),
+			"url": public_route_url(settings["site_url"], collection["route"])
+		})
+	}
+	return navigation
+}
+
+func write_public_site_index(settings, pages_data, custom_collections, record_paths) {
+	combined := ""
+	path_idx := 0
+	loop {
+		if path_idx >= len(record_paths) {
+			break
+		}
+		record_path := record_paths[path_idx]
+		path_idx := path_idx + 1
+		if path_exists(record_path) == false {
+			continue
+		}
+		chunk := trim(read_file(record_path))
+		if len(chunk) > 0 {
+			if len(combined) > 0 {
+				combined = combined + "\n"
+			}
+			combined = combined + chunk
+		}
+	}
+
+	record_lines := []
+	if len(combined) > 0 {
+		record_lines = sort(split(combined, "\n"))
+	}
+
+	seen_ids := {}
+	seen_urls := {}
+	content_type_counts := {}
+	content_type_taxonomies := {}
+	record_idx := 0
+	loop {
+		if record_idx >= len(record_lines) {
+			break
+		}
+		fields := split(record_lines[record_idx], "\t")
+		if len(fields) != 4 {
+			print("Error: Invalid WebMCP public record fragment")
+			exit(1)
+		}
+		record := null
+		try {
+			record = parse_json(fields[3])
+		} except err {
+			print("Error: Invalid WebMCP public record JSON")
+			exit(1)
+		}
+		if is_dict(record) == false || has_key(record, "id") == false || has_key(record, "url") == false || has_key(record, "type") == false {
+			print("Error: Invalid WebMCP public record shape")
+			exit(1)
+		}
+		record_id := trim(to_string(record["id"]))
+		record_url := trim(to_string(record["url"]))
+		record_type := trim(to_string(record["type"]))
+		if len(record_id) == 0 || len(record_url) == 0 || starts_with(record_url, "/") == false || contains(record_url, "..") {
+			print("Error: Unsafe WebMCP public record URL or ID: " + record_id)
+			exit(1)
+		}
+		if has_key(seen_ids, record_id) {
+			print("Error: Duplicate WebMCP public record ID: " + record_id)
+			exit(1)
+		}
+		if has_key(seen_urls, record_url) {
+			print("Error: Duplicate WebMCP public record URL: " + record_url)
+			exit(1)
+		}
+		seen_ids[record_id] = true
+		seen_urls[record_url] = true
+		if has_key(content_type_counts, record_type) {
+			content_type_counts[record_type] = content_type_counts[record_type] + 1
+		} else {
+			content_type_counts[record_type] = 0
+			content_type_counts[record_type] = content_type_counts[record_type] + 1
+		}
+		type_taxonomies := {}
+		if has_key(content_type_taxonomies, record_type) {
+			type_taxonomies = content_type_taxonomies[record_type]
+		}
+		if has_key(record, "taxonomies") && is_dict(record["taxonomies"]) {
+			taxonomy_names := keys(record["taxonomies"])
+			taxonomy_idx := 0
+			loop {
+				if taxonomy_idx >= len(taxonomy_names) {
+					break
+				}
+				type_taxonomies[taxonomy_names[taxonomy_idx]] = true
+				taxonomy_idx := taxonomy_idx + 1
+			}
+		}
+		content_type_taxonomies[record_type] = type_taxonomies
+		# Replace the sortable fragment with its serializer-produced JSON before
+		# constructing the final array in one native parse.
+		record_lines[record_idx] = fields[3]
+		record_idx := record_idx + 1
+	}
+
+	type_titles := {"pages": "Pages", "posts": "Posts"}
+	type_listings := {}
+	if settings["no_index"] == false && len(trim(to_string(settings["blog_slug"]))) > 0 {
+		type_listings["posts"] = public_route_url(settings["site_url"], settings["blog_slug"] + "/")
+	}
+	collection_idx := 0
+	loop {
+		if collection_idx >= len(custom_collections) {
+			break
+		}
+		collection := custom_collections[collection_idx]
+		collection_idx := collection_idx + 1
+		type_titles[collection["slug"]] = collection["title"]
+		type_listings[collection["slug"]] = public_route_url(settings["site_url"], collection["route"])
+	}
+
+	content_types := []
+	type_names := sort(keys(content_type_counts))
+	type_idx := 0
+	loop {
+		if type_idx >= len(type_names) {
+			break
+		}
+		name := type_names[type_idx]
+		type_idx := type_idx + 1
+		title := taxonomy_label(name)
+		if has_key(type_titles, name) {
+			title = type_titles[name]
+		}
+		type_taxonomy_names := []
+		if has_key(content_type_taxonomies, name) {
+			type_taxonomy_names = sort(keys(content_type_taxonomies[name]))
+		}
+		type_info := {
+			"name": name,
+			"title": bounded_public_text(title, 160),
+			"count": content_type_counts[name],
+			"taxonomies": type_taxonomy_names
+		}
+		if has_key(type_listings, name) {
+			type_info["listing_url"] = type_listings[name]
+		}
+		content_types = push(content_types, type_info)
+	}
+
+	items := []
+	if len(record_lines) > 0 {
+		items = parse_json("[" + join(record_lines, ",") + "]")
+	}
+	index_document := {
+		"schema": "kujo-ssg-site-index/v1",
+		"generated_by": {"name": "kujo-ssg", "version": VERSION},
+		"site": {
+			"title": bounded_public_text(settings["site_title"], 160),
+			"tagline": bounded_public_text(settings["site_tagline"], 320),
+			"url": trim(to_string(settings["site_url"])),
+			"base_path": site_base_path(settings["site_url"]),
+			"language": "en"
+		},
+		"navigation": public_navigation(settings, pages_data, custom_collections, content_type_counts),
+		"content_types": content_types,
+		"items": items
+	}
+
+	well_known_dir := path_join(settings["output"], ".well-known")
+	ensure_dir(well_known_dir)
+	write_file(path_join(well_known_dir, "kujo-site-index.json"), to_json(index_document) + "\n")
+}
+
 func load_lookup(path) {
 	lookup := {}
 	if !path_exists(path) {
@@ -1195,6 +1415,152 @@ func resolve_taxonomy_groups(meta, content_type, taxonomy_lookups) {
 	}
 
 	return groups
+}
+
+# Produce the allowlisted, deterministic taxonomy projection used by the public
+# site index. Raw lookup IDs and arbitrary frontmatter never cross this seam.
+func public_taxonomies(groups) {
+	out := {}
+	if !is_dict(groups) {
+		return out
+	}
+
+	names := sort(keys(groups))
+	name_idx := 0
+	loop {
+		if name_idx >= len(names) {
+			break
+		}
+		name := clean_slug(names[name_idx])
+		name_idx := name_idx + 1
+		if name == "untitled" || len(name) > 64 {
+			continue
+		}
+
+		terms := merge_unique_strings([], to_string_array(groups[name]))
+		sortable_terms := []
+		seen_terms := {}
+		term_idx := 0
+		loop {
+			if term_idx >= len(terms) {
+				break
+			}
+			term := trim(regex_replace(to_string(terms[term_idx]), "\\s+", " "))
+			term_idx := term_idx + 1
+			if len(term) == 0 {
+				continue
+			}
+			if len(term) > 128 {
+				term = substring(term, 0, 128)
+			}
+			term_key := to_lower(term)
+			if has_key(seen_terms, term_key) {
+				continue
+			}
+			seen_terms[term_key] = true
+			sortable_terms = push(sortable_terms, term_key + "\t" + term)
+		}
+		sortable_terms = sort(sortable_terms)
+		bounded := []
+		term_idx = 0
+		loop {
+			if term_idx >= len(sortable_terms) || term_idx >= 20 {
+				break
+			}
+			parts := split(sortable_terms[term_idx], "\t")
+			bounded = push(bounded, parts[1])
+			term_idx := term_idx + 1
+		}
+		if len(bounded) > 0 {
+			out[name] = bounded
+		}
+	}
+	return out
+}
+
+func bounded_public_text(value, maximum) {
+	text := trim(regex_replace(regex_replace(to_string(value), "<[^>]+>", " "), "\\s+", " "))
+	if len(text) > maximum {
+		text = trim(substring(text, 0, maximum))
+	}
+	return text
+}
+
+func site_base_path(site_url) {
+	site := trim(to_string(site_url))
+	if len(site) == 0 {
+		return "/"
+	}
+	fragment_pos := index_of(site, "#")
+	if fragment_pos >= 0 {
+		site = substring(site, 0, fragment_pos)
+	}
+	query_pos := index_of(site, "?")
+	if query_pos >= 0 {
+		site = substring(site, 0, query_pos)
+	}
+	scheme_pos := index_of(site, "://")
+	if scheme_pos >= 0 {
+		after_scheme := substring(site, scheme_pos + 3, len(site))
+		slash_pos := index_of(after_scheme, "/")
+		if slash_pos < 0 {
+			return "/"
+		}
+		site = substring(after_scheme, slash_pos, len(after_scheme))
+	}
+	if !starts_with(site, "/") {
+		site = "/" + site
+	}
+	loop {
+		if len(site) <= 1 || !ends_with(site, "/") {
+			break
+		}
+		site = substring(site, 0, len(site) - 1)
+	}
+	if site == "/" {
+		return site
+	}
+	return site + "/"
+}
+
+func public_route_url(base_path, route) {
+	clean_route := normalize_route(route)
+	base := site_base_path(base_path)
+	if len(clean_route) == 0 {
+		return base
+	}
+	if base == "/" {
+		return "/" + clean_route
+	}
+	return base + clean_route
+}
+
+func public_content_record(content_type, slug, route, title, description, summary, language, searchable, taxonomies, published, updated, site_url) {
+	record := {
+		"id": content_type + ":" + slug,
+		"type": content_type,
+		"slug": slug,
+		"url": public_route_url(site_url, route),
+		"title": bounded_public_text(title, 160),
+		"description": bounded_public_text(description, 320),
+		"summary": bounded_public_text(summary, 600),
+		"language": normalize_lang(language),
+		"searchable": searchable,
+		"taxonomies": public_taxonomies(taxonomies)
+	}
+	published_iso := trim(to_string(published))
+	if len(published_iso) == 10 {
+		record["published"] = published_iso
+	}
+	updated_iso := trim(to_string(updated))
+	if len(updated_iso) == 10 {
+		record["updated"] = updated_iso
+	}
+	return record
+}
+
+func public_record_line(record) {
+	return record["type"] + "\t" + record["url"] + "\t" + record["id"] + "\t" + to_json(record)
 }
 
 func taxonomy_terms_from_groups(groups, taxonomy_name) {
@@ -1756,6 +2122,45 @@ func json_escape(value) {
 	return s
 }
 
+func webmcp_runtime_source() {
+	return join([
+		"(()=>{'use strict';const m=document.modelContext,s=document.currentScript;if(!m||typeof m.registerTool!=='function'||!s)return;const u=new URL(s.dataset.kujoSiteIndex||'',document.baseURI);if(u.origin!==location.origin)return;let p;const E=x=>{throw Error('Kujo WebMCP: '+x)},O=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{},N=x=>String(x).trim().toLocaleLowerCase(),C=(x,n)=>{x=String(x||'').replace(/\\s+/g,' ').trim();return x.length>n?x.slice(0,n):x},K=(x,a)=>{for(const k of Object.keys(x))if(!a.includes(k))E('unknown argument '+k)},L=x=>{if(x===undefined)return 5;if(!Number.isInteger(x)||x<1||x>10)E('limit must be 1 to 10');return x},S=c=>c&&c.signal instanceof AbortSignal?c.signal:undefined;",
+		"const D=a=>{if(!a||a.schema!=='kujo-ssg-site-index/v1'||!a.site||!Array.isArray(a.navigation)||!Array.isArray(a.content_types)||!Array.isArray(a.items))E('unsupported or malformed site index');return a},F=q=>{if(!p)p=fetch(u.href,{headers:{Accept:'application/json'},credentials:'same-origin',signal:q}).then(r=>{if(!r.ok)E('site index request failed');return r.json()}).then(D).catch(e=>{p=0;throw e});return p},T=(a,t)=>a.content_types.some(x=>x.name===t),A=i=>{const a=[];for(const n of Object.keys(i.taxonomies||{}).sort())for(const t of i.taxonomies[n]||[])a.push(String(t));return a},R=i=>({id:i.id,type:i.type,title:i.title,description:C(i.description,120),url:i.url});",
+		"const Q=(a,t,v)=>{if(v===undefined)return{};if(!v||typeof v!=='object'||Array.isArray(v))E('taxonomy must be an object');const n=Object.keys(v),z=a.content_types.find(x=>x.name===t),w=z?z.taxonomies:[];if(n.length>3)E('too many taxonomies');for(const k of n)if(!w.includes(k)||!Array.isArray(v[k])||v[k].length<1||v[k].length>5||v[k].some(x=>typeof x!=='string'||!N(x)))E('invalid taxonomy filter');return v},M=(i,f)=>{for(const k of Object.keys(f)){const a=(i.taxonomies&&i.taxonomies[k]||[]).map(N);if(!f[k].some(x=>a.includes(N(x))))return false}return true};",
+		"async function I(x,c){x=O(x);K(x,[]);const a=await F(S(c));return{schema:a.schema,site:a.site,navigation:a.navigation.slice(0,25),content_types:a.content_types.slice(0,25)}}",
+		"async function H(x,c){x=O(x);K(x,['query','limit','content_type']);if(typeof x.query!=='string'||x.query.trim().length<1||x.query.trim().length>200)E('query must contain 1 to 200 characters');const l=L(x.limit),a=await F(S(c)),q=N(x.query);if(x.content_type!==undefined&&!T(a,x.content_type))E('unknown content_type');const z=[];for(const i of a.items){if(!i.searchable||x.content_type&&i.type!==x.content_type)continue;const t=N(i.title),d=N(i.description),b=N(i.summary),h=A(i).filter(y=>N(y).includes(q));let r=t===q?100:t.startsWith(q)?80:t.includes(q)?60:h.length?40:d.includes(q)?25:b.includes(q)?10:0;if(r)z.push({i,r,h})}z.sort((a,b)=>b.r-a.r||String(a.i.url).localeCompare(String(b.i.url))||String(a.i.id).localeCompare(String(b.i.id)));const y=z.slice(0,l).map(x=>{const a=R(x.i);a.score=x.r;if(x.h.length)a.matched_taxonomies=x.h.slice(0,5);return a});return{query:C(x.query,200),results:y,returned_count:y.length,has_more:z.length>y.length}}",
+		"async function B(x,c){x=O(x);K(x,['type','taxonomy','limit']);if(typeof x.type!=='string'||!x.type.trim())E('type is required');const l=L(x.limit),a=await F(S(c));if(!T(a,x.type))E('unknown content type');const f=Q(a,x.type,x.taxonomy),z=a.items.filter(i=>i.type===x.type&&M(i,f)).sort((a,b)=>String(a.url).localeCompare(String(b.url))||String(a.id).localeCompare(String(b.id))),y=z.slice(0,l).map(R);return{type:x.type,taxonomy:f,items:y,returned_count:y.length,total_count:z.length,has_more:z.length>y.length}}",
+		"async function G(x,c){x=O(x);K(x,['id','url']);const d=typeof x.id==='string'&&x.id.trim(),v=typeof x.url==='string'&&x.url.trim();if(!!d===!!v)E('provide exactly one of id or url');const a=await F(S(c));let i;if(d)i=a.items.find(y=>y.id===x.id.trim());else{const y=new URL(x.url,location.href);if(y.origin!==location.origin)E('url must be same-origin');i=a.items.find(z=>z.url===y.pathname)}if(!i)E('content record not found');const o={id:i.id,type:i.type,slug:i.slug,url:i.url,title:i.title,description:i.description,summary:i.summary,language:i.language,searchable:i.searchable,taxonomies:{}};for(const n of Object.keys(i.taxonomies||{}).sort())o.taxonomies[n]=i.taxonomies[n].slice(0,5);if(i.published)o.published=i.published;if(i.updated)o.updated=i.updated;return o}",
+		"const a={readOnlyHint:true,untrustedContentHint:true},e={type:'object',additionalProperties:false},t=[",
+		"{name:'get_site_info',description:'Describe this public static site, its navigation, and available content collections.',inputSchema:{...e,properties:{}},execute:I,annotations:a},",
+		"{name:'search_site',description:'Search concise public site records. Use a returned ID or URL with get_content.',inputSchema:{...e,properties:{query:{type:'string',minLength:1,maxLength:200},limit:{type:'integer',minimum:1,maximum:10},content_type:{type:'string',minLength:1,maxLength:64}},required:['query']},execute:H,annotations:a},",
+		"{name:'list_content',description:'List public records from one discovered type, optionally filtered by taxonomy labels.',inputSchema:{...e,properties:{type:{type:'string',minLength:1,maxLength:64},taxonomy:{type:'object',maxProperties:3,additionalProperties:{type:'array',minItems:1,maxItems:5,items:{type:'string',minLength:1,maxLength:128}}},limit:{type:'integer',minimum:1,maximum:10}},required:['type']},execute:B,annotations:a},",
+		"{name:'get_content',description:'Retrieve one known public record by exact Kujo ID or same-origin URL. Returns no HTML.',inputSchema:{...e,properties:{id:{type:'string',minLength:1,maxLength:256},url:{type:'string',minLength:1,maxLength:2048}},oneOf:[{required:['id']},{required:['url']}]},execute:G,annotations:a}],r=new AbortController;addEventListener('pagehide',()=>r.abort(),{once:true});Promise.all(t.map(x=>m.registerTool(x,{signal:r.signal}))).catch(()=>{})})();",
+		""
+	], "\n")
+}
+
+func inject_webmcp_runtime(html, settings, route) {
+	if !settings["webmcp"] || index_of(html, "data-kujo-webmcp") >= 0 {
+		return html
+	}
+	runtime_file := "assets/js/kujo-webmcp.js"
+	if settings["minify"] {
+		runtime_file = "assets/js/kujo-webmcp.min.js"
+	}
+	prefix := route_prefix(route)
+	tag := "<script src=\"" + xml_escape(prefix + runtime_file) + "\" data-kujo-webmcp data-kujo-site-index=\"" + xml_escape(prefix + ".well-known/kujo-site-index.json") + "\" defer></script>"
+	body_end := index_of(to_lower(html), "</body>")
+	if body_end >= 0 {
+		return substring(html, 0, body_end) + tag + substring(html, body_end, len(html))
+	}
+	html_end := index_of(to_lower(html), "</html>")
+	if html_end >= 0 {
+		return substring(html, 0, html_end) + tag + substring(html, html_end, len(html))
+	}
+	return html + tag
+}
+
 func featured_image_html_tag(featured_image_url, title) {
 	url := trim(featured_image_url)
 	if len(url) == 0 {
@@ -1769,7 +2174,15 @@ func featured_image_html_tag(featured_image_url, title) {
 func render_layout(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta) {
 	# Delegates to the native renderer (compiled once, byte-identical to the
 	# previous interpreted body, which is preserved as render_layout_interpreted).
-	return render_layout_native(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta)
+	html := render_layout_native(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta)
+	webmcp_skip := false
+	if has_key(page_meta, "webmcp_skip") {
+		webmcp_skip = parse_bool_value(page_meta["webmcp_skip"], false)
+	}
+	if settings["webmcp"] && !webmcp_skip {
+		html = inject_webmcp_runtime(html, settings, route)
+	}
+	return html
 }
 
 func render_layout_interpreted(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta) {
@@ -2824,6 +3237,7 @@ func create_sample_config(format_name) {
 		"llms": "public",
 		"minify": false,
 		"download_remote_images": false,
+		"webmcp": false,
 		"watch": false
 	}
 
@@ -2984,6 +3398,11 @@ func apply_cli_overrides(settings, cli_args) {
 			i := i + 1
 			continue
 		}
+		if token == "--webmcp" {
+			settings["webmcp"] = true
+			i := i + 1
+			continue
+		}
 		if token == "--posts-at-root" {
 			settings["posts_at_root"] = true
 			i := i + 1
@@ -3141,6 +3560,7 @@ func normalize_settings(settings) {
 		{"key": "minify", "fallback": false},
 		{"key": "download_remote_images", "fallback": false},
 		{"key": "drafts", "fallback": false},
+		{"key": "webmcp", "fallback": false},
 		{"key": "posts_at_root", "fallback": false},
 		{"key": "no_index", "fallback": false},
 		{"key": "no_aux", "fallback": false},
@@ -3312,6 +3732,11 @@ func build_site(settings) {
 		ensure_dir(output_dir)
 
 		copy_assets(settings)
+		if settings["webmcp"] {
+			webmcp_assets_dir := path_join(output_dir, "assets/js")
+			ensure_dir(webmcp_assets_dir)
+			write_file(path_join(webmcp_assets_dir, "kujo-webmcp.js"), webmcp_runtime_source())
+		}
 		generate_fonts_css(settings)
 
 		# Generate a lightweight SVG favicon from the site initial.
@@ -3502,6 +3927,10 @@ func build_site(settings) {
 		page_categories := meta_terms(meta, "categories", categories_lookup)
 		page_tags := meta_terms(meta, "tags", tags_lookup)
 		page_custom_taxonomies_html := custom_taxonomies_html(meta, "pages", taxonomy_lookups, reserved_taxonomy_slots, has_custom_tax_lookups)
+		page_public_taxonomies := {}
+		if settings["webmcp"] && !parse_bool_value(meta["draft"], false) {
+			page_public_taxonomies = resolve_taxonomy_groups(meta, "pages", taxonomy_lookups)
+		}
 			pages_data = push(pages_data, {
 				"title": title,
 				"nav_title": trim(to_string(meta["nav_title"])),
@@ -3517,10 +3946,12 @@ func build_site(settings) {
 			"featured_image": featured_image,
 			"author": author_name,
 			"categories": page_categories,
-			"tags": page_tags,
-			"taxonomies_html": page_custom_taxonomies_html,
+				"tags": page_tags,
+				"taxonomies": page_public_taxonomies,
+				"taxonomies_html": page_custom_taxonomies_html,
 			"body": parsed["body"],
 				"template": trim(to_string(meta["template"])),
+				"draft": parse_bool_value(meta["draft"], false),
 				"nav_hide": parse_bool_value(meta["nav_hide"], false),
 				"date": trim(to_string(meta["date"])),
 				"section": trim(to_string(meta["section"])),
@@ -3565,6 +3996,15 @@ func build_site(settings) {
 	}
 	if path_exists(records_tmp) {
 		delete_file(records_tmp)
+	}
+	webmcp_records_tmp := path_join(output_dir, ".kujo-webmcp-records.tmp")
+	if phase == "posts" {
+		webmcp_records_tmp = path_join(output_dir, ".kujo-webmcp-records-" + to_string(shard) + ".tmp")
+	} else if phase == "finalize" {
+		webmcp_records_tmp = path_join(output_dir, ".kujo-webmcp-final.tmp")
+	}
+	if settings["webmcp"] && path_exists(webmcp_records_tmp) {
+		delete_file(webmcp_records_tmp)
 	}
 
 	built_pages := []
@@ -3647,6 +4087,25 @@ func build_site(settings) {
 			append_file(sitemap_tmp, sitemap_url_entry(site_url, page_data["route"], page_lastmod["iso"], blog_prefix))
 		}
 		built_pages = push(built_pages, page_data)
+		if settings["webmcp"] && !page_data["draft"] {
+			page_published := parse_post_date(page_data["date"])
+			page_updated := parse_post_date(page_data["last_updated"])
+			page_record := public_content_record(
+				"pages",
+				page_data["slug"],
+				page_data["route"],
+				page_data["title"],
+				page_data["description"],
+				excerpt_from_markdown(page_data["body"]),
+				page_data["lang"],
+				!page_data["search_exclude"],
+				page_data["taxonomies"],
+				page_published["iso"],
+				page_updated["iso"],
+				settings["site_url"]
+			)
+			append_file(webmcp_records_tmp, public_record_line(page_record) + "\n")
+		}
 	}
 
 	# Posts accumulate as escaped tab-delimited record lines streamed to a temp file
@@ -3672,7 +4131,8 @@ func build_site(settings) {
 		}
 		parsed := parse_frontmatter(read_file(post_file), post_file)
 		meta := parsed["meta"]
-		if !settings["drafts"] && parse_bool_value(meta["draft"], false) {
+		post_is_draft := parse_bool_value(meta["draft"], false)
+		if !settings["drafts"] && post_is_draft {
 			continue
 		}
 
@@ -3821,6 +4281,24 @@ func build_site(settings) {
 		post_sort_key := post_sort_prefix(settings["sort_by"], post_date["sort_key"], title, author_name, order_val)
 		post_record := post_sort_key + "\t" + encode_post_record_field(route) + "\t" + encode_post_record_field(title) + "\t" + encode_post_record_field(excerpt) + "\t" + encode_post_record_field(featured_image) + "\t" + encode_post_record_tags(tags) + "\t" + encode_post_record_field(post_date["rfc822"]) + "\t" + encode_post_record_field(post_date["iso"])
 		append_file(records_tmp, post_record + "\n")
+		if settings["webmcp"] && !post_is_draft {
+			post_updated := parse_post_date(meta["last_updated"])
+			public_post := public_content_record(
+				"posts",
+				slug,
+				route,
+				title,
+				description,
+				excerpt,
+				lang,
+				!parse_bool_value(meta["search_exclude"], false),
+				resolve_taxonomy_groups(meta, "posts", taxonomy_lookups),
+				post_date["iso"],
+				post_updated["iso"],
+				settings["site_url"]
+			)
+			append_file(webmcp_records_tmp, public_record_line(public_post) + "\n")
+		}
 		post_count := post_count + 1
 	}
 
@@ -3916,7 +4394,8 @@ func build_site(settings) {
 			collection_file_idx := collection_file_idx + 1
 			parsed := parse_frontmatter(read_file(item_file), item_file)
 			meta := parsed["meta"]
-			if !settings["drafts"] && parse_bool_value(meta["draft"], false) {
+			item_is_draft := parse_bool_value(meta["draft"], false)
+			if !settings["drafts"] && item_is_draft {
 				continue
 			}
 
@@ -4068,6 +4547,24 @@ func build_site(settings) {
 				"route": route,
 				"order": parse_int_value(meta["order"], 1000)
 			})
+			if settings["webmcp"] && !item_is_draft {
+				item_updated := parse_post_date(meta["last_updated"])
+				public_item := public_content_record(
+					collection_slug,
+					slug,
+					route,
+					title,
+					description,
+					excerpt,
+					lang,
+					!parse_bool_value(meta["search_exclude"], false),
+					resolve_taxonomy_groups(meta, collection_slug, taxonomy_lookups),
+					item_date["iso"],
+					item_updated["iso"],
+					settings["site_url"]
+				)
+				append_file(webmcp_records_tmp, public_record_line(public_item) + "\n")
+			}
 		}
 
 		if len(collection_items) == 0 {
@@ -4155,6 +4652,21 @@ func build_site(settings) {
 				append_file(llms_collections_tmp, "- [" + item["title"] + "](" + site_url + "/" + item["route"] + ")\n")
 			}
 		}
+	}
+
+	if settings["webmcp"] {
+		webmcp_record_paths := [webmcp_records_tmp]
+		if phase == "finalize" {
+			webmcp_shard_idx := 0
+			loop {
+				if webmcp_shard_idx >= shards {
+					break
+				}
+				webmcp_record_paths = push(webmcp_record_paths, path_join(output_dir, ".kujo-webmcp-records-" + to_string(webmcp_shard_idx) + ".tmp"))
+				webmcp_shard_idx := webmcp_shard_idx + 1
+			}
+		}
+		write_public_site_index(settings, pages_data, custom_collections, webmcp_record_paths)
 	}
 
 	total_posts := len(posts_sorted)
@@ -4415,7 +4927,8 @@ func build_site(settings) {
 		{
 			"seo_title": "Page Not Found",
 			"seo_description": "Page not found",
-			"lang": "en"
+			"lang": "en",
+			"webmcp_skip": true
 		}
 	)
 	write_file(path_join(output_dir, "404.html"), not_found_html)
@@ -4427,6 +4940,9 @@ func build_site(settings) {
 	if path_exists(records_tmp) {
 		delete_file(records_tmp)
 	}
+	if path_exists(webmcp_records_tmp) {
+		delete_file(webmcp_records_tmp)
+	}
 	if phase == "finalize" {
 		cleanup_shard_idx := 0
 		loop {
@@ -4435,12 +4951,16 @@ func build_site(settings) {
 			}
 			leftover_records := path_join(output_dir, ".kujo-records-" + to_string(cleanup_shard_idx) + ".tmp")
 			leftover_sitemap := path_join(output_dir, ".kujo-sitemap-posts-" + to_string(cleanup_shard_idx) + ".tmp")
+			leftover_webmcp := path_join(output_dir, ".kujo-webmcp-records-" + to_string(cleanup_shard_idx) + ".tmp")
 			cleanup_shard_idx := cleanup_shard_idx + 1
 			if path_exists(leftover_records) {
 				delete_file(leftover_records)
 			}
 			if path_exists(leftover_sitemap) {
 				delete_file(leftover_sitemap)
+			}
+			if path_exists(leftover_webmcp) {
+				delete_file(leftover_webmcp)
 			}
 		}
 		post_manifest_cleanup := path_join(output_dir, ".kujo-post-manifest.txt")

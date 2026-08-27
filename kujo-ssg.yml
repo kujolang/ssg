@@ -21,6 +21,7 @@ llms: public
 
 watch: false
 minify: true
+webmcp: false
 download_remote_images: false
 no_index: false
 no_aux: false
