@@ -66,7 +66,7 @@ if [[ -f "$OUT_DIR/feed/index.xml" ]]; then
 fi
 
 webmcp_index="$OUT_DIR/.well-known/kujo-site-index.json"
-webmcp_marker_count="$(grep -RIl --include='*.html' 'data-kujo-webmcp' "$OUT_DIR" 2>/dev/null | wc -l | tr -d ' ')"
+webmcp_marker_count="$( { grep -RIl --include='*.html' 'data-kujo-webmcp' "$OUT_DIR" 2>/dev/null || true; } | wc -l | tr -d ' ')"
 if [[ "$webmcp_marker_count" -gt 0 || -f "$webmcp_index" ]]; then
 	if [[ ! -f "$webmcp_index" ]]; then
 		record_failure "FAIL webmcp-index-missing: $webmcp_index"
