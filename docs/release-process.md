@@ -15,6 +15,7 @@ This gate verifies:
 - the version declared in `build.kujo`
 - the presence of a matching changelog entry in `CHANGELOG.md`
 - the full local CI gate in `scripts/run_ci_checks.sh`
+- the deterministic WebMCP config, index, privacy, runtime, layout, and parallel-build contracts
 - it does not deploy or publish the site for you
 
 ## Release Checklist

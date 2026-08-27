@@ -291,6 +291,7 @@ robots: public
 llms: public
 watch: false
 minify: false
+webmcp: false
 download_remote_images: false
 no_index: false
 no_aux: false
@@ -327,6 +328,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--minify`: emit minified CSS/JS assets
 - `--download-remote-images`: mirror remote `featured_image` URLs into output (needs outbound network — see [Runtime Capabilities](#runtime-capabilities))
 - `--drafts`: include `draft: true` content in the build (preview/staging workflow); omitted by default
+- `--webmcp`: enable the experimental static WebMCP v1 index and browser tools; disabled by default
 - `--blog-slug <slug>`: blog route base. Set `blog_slug: ""` in config to omit the blog route and publish posts at the site root.
 - `--posts-at-root`: keep post permalinks at `/<slug>/` while retaining the blog listing under `/<blog_slug>/`
 - `--init <yml|yaml|json>`: scaffold starter config
@@ -392,6 +394,40 @@ the source file and delimiter line.
 `draft: true` excludes content from generated public outputs. Pass `--drafts` to
 include draft content in a build for preview/staging without publishing it by
 default.
+
+## Experimental WebMCP
+
+Kujo can compile public content for browser agents as an experimental, opt-in
+static build target:
+
+```yaml
+webmcp: true
+```
+
+or:
+
+```bash
+kujo run ./build.kujo -- --webmcp
+```
+
+The build adds a versioned public JSON index and a small same-origin JavaScript
+adapter. It registers exactly `get_site_info`, `search_site`, `list_content`,
+and `get_content` through the current `document.modelContext` imperative API.
+No Kujo, Node, Python, database, application API, or remote MCP server is needed
+after deployment.
+
+WebMCP is progressive enhancement: unsupported browsers stop before requesting
+the index and the human-facing site behaves normally. The adapter is currently
+experimental in Chrome and available as site tools to eligible accounts/models
+in the ChatGPT desktop app's built-in browser. Drafts are never included in the
+agent index, even with `--drafts`; `search_exclude: true` removes an item from
+search while preserving list/exact retrieval, and `nav_hide` affects only the
+navigation summary. Unknown frontmatter is not exposed.
+
+`--no-aux` does not suppress WebMCP because the index is required by the
+explicitly enabled build target. `--no-index` controls human-facing listing
+HTML, not the WebMCP data index. See [Experimental WebMCP v1](docs/webmcp.md)
+for schemas, security boundaries, hosting notes, and current testing steps.
 
 ## Taxonomies And Lookups
 
@@ -556,6 +592,12 @@ Primary outputs include:
 - `output/llms.txt`
 - `output/404.html`
 - `output/favicon.svg`
+
+With WebMCP enabled, the build additionally emits:
+
+- `output/.well-known/kujo-site-index.json`
+- `output/assets/js/kujo-webmcp.js`
+- `output/assets/js/kujo-webmcp.min.js` when minification is enabled
 
 `sitemap.xml` uses the sitemaps.org schema with absolute URLs, per-route
 `changefreq`/`priority`, and `lastmod` from post dates. The RSS feed carries

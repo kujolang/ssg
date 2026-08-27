@@ -34,6 +34,7 @@ Current validated release path:
 | CLI override precedence | Present | Fully validated | P0 | Validated |
 | README parity docs | Present | Complete parity docs | P1 | Validated |
 | Security hardening | Partial | Contained local images, delimiter-aware frontmatter, remote-fetch policy | P0 | In progress |
+| Experimental WebMCP v1 | Opt-in static adapter | Four universal read-only tools over a versioned public index | P1 | Implemented |
 | Design rewrite (new branding system) | Pending style input | Complete visual rewrite | P1 | [ ] |
 
 ## Phase 1: Baseline And Parity Definition
