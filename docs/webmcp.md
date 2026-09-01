@@ -142,6 +142,21 @@ schemas. The runtime makes one same-origin fetch on first tool use, caches the
 validated index in memory, honors current execution/registration abort signals,
 and makes no cross-origin request, DOM mutation, storage write, or server call.
 
+## Relationship to Kujo Ability
+
+WebMCP is a protocol-local projection over a static public index, not an
+Ability registry or execution gateway. The four generator-owned tools do not
+carry application identity, tenant policy, approvals, idempotency receipts, or
+server-side handlers, so they must not be presented as
+`kujo.ability/v1` definitions.
+
+An application that needs authenticated reads or any write, delete, external,
+publishing, or deployment operation must define and bind that operation through
+the canonical Ability package and expose it through an authenticated server
+adapter such as CMS, Agents SDK gateway, or MCP. A site may display both
+surfaces, but WebMCP cannot widen an Ability exposure or bypass its policy,
+approval, audit, and receipt boundary.
+
 ## Browser support and testing
 
 API state was rechecked on 2026-08-26. The current producer interface is

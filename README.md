@@ -416,6 +416,12 @@ and `get_content` through the current `document.modelContext` imperative API.
 No Kujo, Node, Python, database, application API, or remote MCP server is needed
 after deployment.
 
+These static browser tools are intentionally separate from Kujo Ability. They
+have no authenticated principal, approval, durable idempotency, or server-side
+execution boundary. Authenticated reads and all mutations belong behind a
+canonical Ability binding in an application gateway; enabling WebMCP never
+exposes or widens those operations.
+
 WebMCP is progressive enhancement: unsupported browsers stop before requesting
 the index and the human-facing site behaves normally. The adapter is currently
 experimental in Chrome and available as site tools to eligible accounts/models

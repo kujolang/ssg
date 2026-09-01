@@ -17,6 +17,8 @@
 
 ### Documentation
 - Aligned the README version badge with the current documented SSG version.
+- Defined the hard boundary between static public WebMCP tools and
+  authenticated canonical Ability execution.
 
 ## 1.0.0 - 2026-08-08
 
