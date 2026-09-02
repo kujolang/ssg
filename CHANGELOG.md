@@ -12,7 +12,7 @@
 
 ### Fixed
 - Replaced oversized lossless featured-image WebP output with quality-82
-  `cwebp` encoding and reject any conversion that is not smaller than its
+  `cwebp` encoding, rejecting any conversion that is not smaller than its
   source.
 - Guarded destructive output cleanup against the filesystem root, working directory, and overlapping source trees.
 - Corrected calendar-date validation, repeated trailing slashes in `site_url`, empty blog slugs, and invalid shard indexes.
