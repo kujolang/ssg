@@ -10,6 +10,8 @@ import sys
 root = pathlib.Path(sys.argv[1])
 catalog = json.loads((root / "abilities/registry.json").read_text())
 assert catalog["schema"] == "kujo.ssg.ability-catalog/v1"
+assert catalog["pack_id"] == "kujo.ssg.core"
+assert catalog["pack_version"] == "1.0.0"
 assert catalog["ability_version"] == "1.0.1"
 assert catalog["runtime"] == "runtime.kujo"
 assert (root / "abilities" / catalog["runtime"]).is_file()
