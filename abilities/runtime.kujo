@@ -49,11 +49,46 @@ func run_build(root, kujo_bin, input) {
 	return {"ok": true, "result": {"built": true, "output": output}}
 }
 
+func run_build_shards(root, input) {
+	output := trim(to_string(input["output"]))
+	site_url := trim(to_string(input["site_url"]))
+	shards := input["shards"]
+	concurrency := input["concurrency"]
+	if safe_relative_path(output) == false { return failure("invalid_output_path", "output must be a contained relative path", {}) }
+	if valid_site_url(site_url) == false { return failure("invalid_site_url", "site_url must use HTTPS unless it is loopback", {}) }
+	if type(shards) != "int" || shards < 1 || shards > 64 || type(concurrency) != "int" || concurrency < 1 || concurrency > 32 { return failure("invalid_shard_configuration", "shards and concurrency exceed the supported bounds", {}) }
+	result := spawn_process(["bash", "scripts/build-parallel.sh", to_string(shards), to_string(concurrency), "--site-url", site_url, "--output", output], {"cwd": root, "timeout_ms": 300000, "max_output_bytes": 1048576})
+	if result.exitcode != 0 { return failure("ssg_sharded_build_failed", "SSG sharded build failed", {"exitcode": result.exitcode}) }
+	return {"ok": true, "result": {"built": true, "output": output, "shards": shards}}
+}
+
+func run_helper(root, operation, arguments) {
+	command := ["python3", "scripts/ability-inspect.py", operation]
+	for argument in arguments { command = push(command, argument) }
+	result := spawn_process(command, {"cwd": root, "timeout_ms": 120000, "max_output_bytes": 1048576})
+	payload := null
+	parse_error := null
+	try { payload = parse_json(trim(result.stdout)) } except e { parse_error = e }
+	if result.exitcode != 0 {
+		if type(payload) == "dict" && has_key(payload, "code") { return failure(payload["code"], payload["message"], {"details": payload["details"]}) }
+		return failure("ssg_helper_failed", "SSG bounded inspection helper failed", {"exitcode": result.exitcode})
+	}
+	if type(parse_error) != "null" || type(payload) != "dict" { return failure("ssg_helper_invalid_output", "SSG bounded inspection helper returned invalid output", {}) }
+	return {"ok": true, "result": payload}
+}
+
 func handler_for(definition, root, kujo_bin) {
 	id := definition["id"]
 	if id == "kujo.ssg.site.inspect" { return func(input, context) { return run_inspect(root) } }
 	if id == "kujo.ssg.site.validate" { return func(input, context) { return run_validate(root, input) } }
 	if id == "kujo.ssg.site.build" { return func(input, context) { return run_build(root, kujo_bin, input) } }
+	if id == "kujo.ssg.content.list" { return func(input, context) { return run_helper(root, "source-list", []) } }
+	if id == "kujo.ssg.content.validate" { return func(input, context) { return run_helper(root, "source-validate", []) } }
+	if id == "kujo.ssg.site.build-shards" { return func(input, context) { return run_build_shards(root, input) } }
+	if id == "kujo.ssg.output.inspect" { return func(input, context) { return run_helper(root, "output-inspect", [input["output"]]) } }
+	if id == "kujo.ssg.output.compare" { return func(input, context) { return run_helper(root, "output-compare", [input["left"], input["right"]]) } }
+	if id == "kujo.ssg.deployment.readiness" { return func(input, context) { return run_helper(root, "readiness", [input["output"]]) } }
+	if id == "kujo.ssg.artifact.export" { return func(input, context) { return run_helper(root, "export", [input["output"], input["artifact"]]) } }
 	return func(input, context) { return failure("ssg_ability_handler_missing", "SSG Ability handler is not implemented", {}) }
 }
 
@@ -63,7 +98,18 @@ export create_ssg_ability_registry := func(root_input, kujo_bin_input) {
 	if root == "" || path_is_dir(root) == false { return failure("invalid_ssg_root", "SSG root must be an existing directory", {}) }
 	if kujo_bin == "" { return failure("invalid_kujo_binary", "Kujo binary path is required", {}) }
 	registry := create_ability_registry()
-	files := ["kujo.ssg.site.inspect.json", "kujo.ssg.site.validate.json", "kujo.ssg.site.build.json"]
+	files := [
+		"kujo.ssg.site.inspect.json",
+		"kujo.ssg.content.list.json",
+		"kujo.ssg.content.validate.json",
+		"kujo.ssg.site.validate.json",
+		"kujo.ssg.site.build.json",
+		"kujo.ssg.site.build-shards.json",
+		"kujo.ssg.output.inspect.json",
+		"kujo.ssg.output.compare.json",
+		"kujo.ssg.deployment.readiness.json",
+		"kujo.ssg.artifact.export.json"
+	]
 	for file in files {
 		definition := parse_json(read_file(path_join(path_join(root, "abilities"), file)))
 		step := register_ability_definition(registry, definition)
