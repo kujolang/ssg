@@ -1,8 +1,9 @@
 {
   "schema": "kujo.ssg.ability-catalog/v1",
   "ability_version": "1.0.1",
+  "runtime": "runtime.kujo",
   "entries": [
-    { "definition": "kujo.ssg.site.inspect.json", "handler": "application-owned", "approval_required": false },
+    { "definition": "kujo.ssg.site.inspect.json", "handler": "runtime.kujo", "approval_required": false },
     { "definition": "kujo.ssg.site.validate.json", "handler": "scripts/validate-generated-output.sh", "approval_required": false },
     { "definition": "kujo.ssg.site.build.json", "handler": "build.kujo", "approval_required": true }
   ]

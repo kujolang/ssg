@@ -18,6 +18,13 @@ jobs:
           repository: kujolang/kujo
           path: kujo-runtime
 
+      - name: Checkout canonical Ability runtime
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: kujolang/ability
+          ref: be093e62bc93e5ec01e99e7da16c5657507ac820
+          path: kennel_packages/ability
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 

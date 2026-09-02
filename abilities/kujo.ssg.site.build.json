@@ -19,6 +19,10 @@
     "properties": { "built": { "type": "boolean" }, "output": { "type": "string" } },
     "additionalProperties": false
   },
-  "effects": [{ "kind": "write", "resource": "kujo.ssg.generated-output" }],
+  "effects": [
+    { "kind": "read", "resource": "kujo.ssg.project" },
+    { "kind": "write", "resource": "kujo.ssg.generated-output" },
+    { "kind": "external", "resource": "kujo.ssg.network" }
+  ],
   "idempotency": { "mode": "keyed" }
 }
