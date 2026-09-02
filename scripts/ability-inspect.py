@@ -23,7 +23,7 @@ def fail(code: str, message: str, details: list[str] | None = None) -> None:
 
 
 def safe_dir(root: Path, raw: str, *, must_exist: bool = True) -> Path:
-    if not raw or len(raw) > 1024 or raw.startswith(("/", "\\")) or "\\" in raw or any(part in ("", ".", "..") for part in raw.split("/")):
+    if not raw or len(raw) > 1024 or raw.startswith(("/", "\\")) or "\\" in raw or ":" in raw or any(part in ("", ".", "..") for part in raw.split("/")):
         fail("invalid_relative_path", "Path must be a contained relative path")
     lexical = root / raw
     if lexical.is_symlink():
@@ -142,7 +142,7 @@ def export_artifact(root: Path, output_raw: str, artifact_raw: str) -> dict:
     output, records = output_manifest(root, output_raw)
     if not artifact_raw.endswith(".tar"):
         fail("invalid_artifact_path", "Artifact path must end in .tar")
-    if not artifact_raw or len(artifact_raw) > 1024 or artifact_raw.startswith(("/", "\\")) or "\\" in artifact_raw or any(part in ("", ".", "..") for part in artifact_raw.split("/")):
+    if not artifact_raw or len(artifact_raw) > 1024 or artifact_raw.startswith(("/", "\\")) or "\\" in artifact_raw or ":" in artifact_raw or any(part in ("", ".", "..") for part in artifact_raw.split("/")):
         fail("invalid_artifact_path", "Artifact path must be a contained relative path")
     lexical_artifact = root / artifact_raw
     if lexical_artifact.is_symlink():
@@ -158,9 +158,9 @@ def export_artifact(root: Path, output_raw: str, artifact_raw: str) -> dict:
         fail("invalid_artifact_path", "Artifact destination must be outside the exported output tree")
     except ValueError:
         pass
-    if artifact.exists() and (artifact.is_symlink() or not artifact.is_file()):
-        fail("invalid_artifact_path", "Artifact destination must be a regular file")
-    with tarfile.open(artifact, "w", format=tarfile.PAX_FORMAT) as archive:
+    if artifact.exists():
+        fail("artifact_exists", "Artifact destination must not already exist")
+    with tarfile.open(artifact, "x", format=tarfile.PAX_FORMAT) as archive:
         for record in records:
             path = output / record["path"]
             info = archive.gettarinfo(str(path), arcname=record["path"])

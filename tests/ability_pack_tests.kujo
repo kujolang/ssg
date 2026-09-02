@@ -81,6 +81,22 @@ spoofed_result = execute_ssg_ability(registry, spoofed_loopback, approved_servic
 assert(spoofed_result["ok"] == false, "HTTP hostnames that merely start with localhost must be rejected")
 assert(spoofed_result["receipt"]["error"]["code"] == "invalid_site_url", "loopback hostname rejection must survive in the canonical receipt")
 
+for invalid_site_url in ["http://localhost:80@evil.test", "https://", "http://localhost:0", "http://127.0.0.1:65536"] {
+	invalid_url_invocation := make_ssg_ability_invocation(build_definition, {"site_url": invalid_site_url, "output": "output-ability", "minify": false}, "build-invalid-url-" + invalid_site_url, "build-invalid-url-key-" + invalid_site_url)
+	invalid_url_invocation["definition_digest"] := ability_definition_digest(build_definition)["digest"]
+	invalid_url_approval := approval
+	invalid_url_approval["binding_digest"] := approval_binding_digest(invalid_url_invocation)
+	invalid_url_invocation["approval"] := invalid_url_approval
+	invalid_url_result := execute_ssg_ability(registry, invalid_url_invocation, approved_services)
+	assert(invalid_url_result["ok"] == false, "malformed or non-loopback site URLs must be rejected")
+	assert(invalid_url_result["receipt"]["error"]["code"] == "invalid_site_url", "site URL rejection must survive in the canonical receipt")
+}
+
+drive_path_invocation := make_ssg_ability_invocation(validate_definition, {"output": "C:/outside"}, "validate-drive", "")
+drive_path_result := execute_ssg_ability(registry, drive_path_invocation, services())
+assert(drive_path_result["ok"] == false, "drive-qualified output paths must be rejected")
+assert(drive_path_result["receipt"]["error"]["code"] == "invalid_output_path", "drive-qualified path rejection must survive in the canonical receipt")
+
 if env("SSG_ABILITY_REAL_BUILD") == "1" {
 	real_registry_result := create_ssg_ability_registry(".", env("KUJO_BIN"))
 	assert(real_registry_result["ok"], "real SSG Ability registry must initialize")
