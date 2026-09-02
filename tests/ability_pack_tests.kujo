@@ -16,7 +16,7 @@ registry_result := create_ssg_ability_registry(".", "/usr/bin/true")
 assert(registry_result["ok"], "SSG Ability registry must initialize from canonical definitions")
 registry := registry_result["registry"]
 definitions := list_ability_definitions(registry, "sdk")
-assert(len(definitions) == 3, "SSG pack must expose three canonical definitions")
+assert(len(definitions) == 10, "SSG pack must expose ten canonical definitions")
 
 inspect_definition := parse_json(read_file("abilities/kujo.ssg.site.inspect.json"))
 inspect_invocation := make_ssg_ability_invocation(inspect_definition, {}, "inspect-1", "")
@@ -25,11 +25,23 @@ assert(inspected["ok"], "bounded SSG inspection must execute")
 assert(inspected["receipt"]["status"] == "succeeded", "inspection must return a succeeded canonical receipt")
 assert(inspected["receipt"]["result"]["configuration"] == "kujo-ssg.yml", "inspection must report the canonical configuration")
 
+content_definition := parse_json(read_file("abilities/kujo.ssg.content.list.json"))
+content_invocation := make_ssg_ability_invocation(content_definition, {}, "content-1", "")
+content_result := execute_ssg_ability(registry, content_invocation, services())
+assert(content_result["ok"], "bounded source listing must execute")
+assert(content_result["receipt"]["result"]["count"] > 0, "source listing must find starter content")
+
 validate_definition := parse_json(read_file("abilities/kujo.ssg.site.validate.json"))
 invalid_path_invocation := make_ssg_ability_invocation(validate_definition, {"output": "../outside"}, "validate-1", "")
 invalid_path := execute_ssg_ability(registry, invalid_path_invocation, services())
 assert(invalid_path["ok"] == false, "validation must reject an escaping output path")
 assert(invalid_path["receipt"]["error"]["code"] == "invalid_output_path", "path rejection must survive in the canonical receipt")
+
+shard_definition := parse_json(read_file("abilities/kujo.ssg.site.build-shards.json"))
+invalid_shards := make_ssg_ability_invocation(shard_definition, {"site_url": "https://example.test", "output": "output-ability", "shards": 65, "concurrency": 1}, "shards-invalid", "shards-key")
+invalid_shard_result := execute_ssg_ability(registry, invalid_shards, services())
+assert(invalid_shard_result["ok"] == false, "sharded build must reject an excessive shard count before execution")
+assert(invalid_shard_result["receipt"]["error"]["code"] == "ability_input_invalid", "sharded build bounds must be enforced by the canonical schema")
 
 build_definition := parse_json(read_file("abilities/kujo.ssg.site.build.json"))
 spoofed_loopback := make_ssg_ability_invocation(build_definition, {"site_url": "http://localhost.evil.test", "output": "output-ability", "minify": false}, "build-spoofed", "build-key-spoofed")
@@ -91,6 +103,15 @@ if env("SSG_ABILITY_REAL_BUILD") == "1" {
 	assert(path_is_file("output-ability-conformance/index.html"), "real fixture build must emit its home page")
 	assert(path_is_file("output-ability-conformance/sitemap.xml"), "real fixture build must emit its sitemap")
 	assert(contains(read_file("output-ability-conformance/sitemap.xml"), "https://ability-fixture.example.test/about/"), "real fixture sitemap must preserve the approved origin")
+	output_definition := parse_json(read_file("abilities/kujo.ssg.output.inspect.json"))
+	output_invocation := make_ssg_ability_invocation(output_definition, {"output": "output-ability-conformance"}, "output-real-1", "")
+	output_result := execute_ssg_ability(real_registry_result["registry"], output_invocation, services())
+	assert(output_result["ok"], "generated output inspection must execute")
+	assert(output_result["receipt"]["result"]["route_count"] > 0, "generated output inspection must report routes")
+	readiness_definition := parse_json(read_file("abilities/kujo.ssg.deployment.readiness.json"))
+	readiness_invocation := make_ssg_ability_invocation(readiness_definition, {"output": "output-ability-conformance"}, "readiness-real-1", "")
+	readiness_result := execute_ssg_ability(real_registry_result["registry"], readiness_invocation, services())
+	assert(readiness_result["ok"], "deployment readiness inspection must execute")
 }
 
 print("SSG executable Ability pack contract passed")

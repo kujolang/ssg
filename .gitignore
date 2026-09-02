@@ -153,6 +153,8 @@ logs/
 *.tmp-*
 *.bak
 *.log
+__pycache__/
+*.pyc
 
 # Optional local config files created by init commands. Uncomment in repos where
 # these are developer-local rather than shared project configuration.

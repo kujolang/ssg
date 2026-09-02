@@ -27,8 +27,10 @@ for entry in catalog["entries"]:
     assert definition["output_schema"]["type"] == "object"
     assert definition["effects"]
     ids.append(definition["id"])
-assert len(ids) == len(set(ids)) == 3
+assert len(ids) == len(set(ids)) == 10
 assert "kujo.ssg.site.build" in ids
+assert "kujo.ssg.site.build-shards" in ids
+assert "kujo.ssg.artifact.export" in ids
 build = json.loads((root / "abilities/kujo.ssg.site.build.json").read_text())
 assert {(effect["kind"], effect["resource"]) for effect in build["effects"]} == {
     ("read", "kujo.ssg.project"),
