@@ -21,6 +21,12 @@ assert_substring_order() {
 	fi
 }
 
+setup_sort_content() {
+	local target_dir="$1"
+	mkdir -p "$target_dir/posts"
+	find content -maxdepth 1 -type f -exec cp {} "$target_dir/" \;
+}
+
 main() {
 	local temp_dir
 	temp_dir="$(mktemp -d)"
@@ -146,6 +152,7 @@ EOF
 	assert_path_exists output/blog/page/2/index.html
 	assert_path_exists output/feed/index.xml
 	assert_path_exists output/sitemap.xml
+	assert_path_exists output/sitemap.xsl
 	assert_path_exists output/robots.txt
 	assert_path_exists output/llms.txt
 	assert_path_missing output/page/3
@@ -155,6 +162,9 @@ EOF
 	assert_file_contains output/robots.txt 'Allow: /'
 	assert_file_contains output/llms.txt 'https://example.com/sitemap.xml'
 	assert_file_contains output/sitemap.xml '<loc>https://example.com/about/</loc>'
+	assert_file_contains output/sitemap.xml '<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>'
+	assert_file_contains output/sitemap.xsl '<xsl:stylesheet version="1.0"'
+	assert_file_contains output/sitemap.xsl 'count(sm:urlset/sm:url)'
 	assert_file_contains output/sitemap.xml '<loc>https://example.com/blog/welcome-to-kujo-ssg/</loc>'
 	assert_file_contains output/feed/index.xml '<rss version="2.0">'
 	assert_file_contains output/about/index.html '<title>About the Kujo SSG Starter | Kujo SSG Starter Site</title>'
@@ -175,6 +185,17 @@ EOF
 	assert_file_contains output/metadata-proof/index.html '<meta property="og:url" content="https://docs.example.test/metadata-proof/">'
 	assert_file_contains output/metadata-proof/index.html '<meta name="twitter:image" content="https://example.com/images/post-welcome-kujo-ssg-'
 	assert_file_contains output/metadata-proof/index.html '<meta property="og:image" content="https://example.com/images/post-welcome-kujo-ssg-'
+	local optimized_image
+	optimized_image="$(find output/images -maxdepth 1 -type f -name 'post-welcome-kujo-ssg-*.webp' -print -quit)"
+	assert_path_exists "$optimized_image"
+	if [[ "$(head -c 4 "$optimized_image")" != "RIFF" || "$(dd if="$optimized_image" bs=1 skip=8 count=4 2>/dev/null)" != "WEBP" ]]; then
+		echo "Generated featured image is not a valid WebP container: $optimized_image"
+		exit 1
+	fi
+	if [[ "$(wc -c < "$optimized_image" | tr -d ' ')" -ge "$(wc -c < assets/images/post-welcome-kujo-ssg.jpg | tr -d ' ')" ]]; then
+		echo "Generated WebP is not smaller than its JPEG source: $optimized_image"
+		exit 1
+	fi
 	assert_file_contains output/metadata-proof/index.html '<meta property="og:site_name" content="Kujo SSG Starter Site">'
 	assert_file_contains output/frontmatter-delimiter-proof/index.html '<title>Delimiter Proof | Kujo SSG Starter Site</title>'
 	assert_file_contains output/frontmatter-delimiter-proof/index.html '<meta name="description" content="A quoted --- delimiter stays in frontmatter.">'
@@ -201,12 +222,19 @@ EOF
 	fi
 	assert_file_not_contains output/llms.txt 'Draft Project'
 
+	# Image conversion is fully asserted above. Keep the remaining routing and
+	# sorting builds focused so they do not repeatedly encode the same fixtures.
+	find content -type f -name '*.md' -exec perl -ni -e 'print unless /^featured_image:/' {} \;
+	rm -rf content/storefronts content/tshirts content/pants content/shorts content/projects
+	find content/posts -type f ! -name 'welcome-to-kujo-ssg.md' -delete
+
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --site-url https://example.com --no-aux
 	assert_output_contains "Build complete"
 	assert_path_exists output/about/index.html
 	assert_path_missing output/robots.txt
 	assert_path_missing output/llms.txt
 	assert_path_missing output/sitemap.xml
+	assert_path_missing output/sitemap.xsl
 	assert_path_missing output/feed/index.xml
 
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --site-url https://example.com --no-index
@@ -224,9 +252,7 @@ EOF
 	assert_path_missing output/blog/welcome-to-kujo-ssg/index.html
 	assert_file_contains output/llms.txt 'https://example.com/welcome-to-kujo-ssg/'
 
-	cp -R content content-sort-date
-	rm -rf content-sort-date/posts
-	mkdir -p content-sort-date/posts
+	setup_sort_content content-sort-date
 	cat > content-sort-date/posts/a-tie-first.md <<'EOF'
 ---
 title: Tie First
@@ -268,9 +294,7 @@ EOF
 	assert_substring_order output-sort-date/blog/index.html 'Newest Anchor' 'Tie First'
 	assert_substring_order output-sort-date/blog/index.html 'Tie First' 'Tie Second'
 
-	cp -R content content-sort-title
-	rm -rf content-sort-title/posts
-	mkdir -p content-sort-title/posts
+	setup_sort_content content-sort-title
 	cat > content-sort-title/posts/a-title-tie-first.md <<'EOF'
 ---
 title: Same Title
@@ -312,9 +336,7 @@ EOF
 	assert_substring_order output-sort-title/blog/index.html 'Aardvark Title' 'Title tie first excerpt'
 	assert_substring_order output-sort-title/blog/index.html 'Title tie first excerpt' 'Title tie second excerpt'
 
-	cp -R content content-sort-author
-	rm -rf content-sort-author/posts
-	mkdir -p content-sort-author/posts
+	setup_sort_content content-sort-author
 	cat > content-sort-author/posts/a-author-tie-first.md <<'EOF'
 ---
 title: Author Tie First
@@ -356,9 +378,7 @@ EOF
 	assert_substring_order output-sort-author/blog/index.html 'Author Anchor' 'Author Tie First'
 	assert_substring_order output-sort-author/blog/index.html 'Author Tie First' 'Author Tie Second'
 
-	cp -R content content-sort-order
-	rm -rf content-sort-order/posts
-	mkdir -p content-sort-order/posts
+	setup_sort_content content-sort-order
 	cat > content-sort-order/posts/a-order-tie-first.md <<'EOF'
 ---
 title: Order Tie First

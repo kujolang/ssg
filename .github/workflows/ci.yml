@@ -21,6 +21,9 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install WebP encoder
+        run: sudo apt-get update && sudo apt-get install -y webp
+
       - name: Run repo CI checks
         env:
           KUJO_RUNTIME_DIR: ${{ github.workspace }}/kujo-runtime

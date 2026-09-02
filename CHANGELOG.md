@@ -3,12 +3,17 @@
 ## Unreleased
 
 ### Added
+- Added a responsive `sitemap.xsl` browser view so sitemap URLs render once in
+  a readable table instead of relying on inconsistent browser XML viewers.
 - Added a launch-readiness Spec and deterministic Eval suite for the local SSG release review.
 - Added experimental, opt-in static WebMCP v1 generation with a versioned public
   content index, four universal read-only tools, automatic custom-layout
   injection, subpath support, and deterministic full/sharded output.
 
 ### Fixed
+- Replaced oversized lossless featured-image WebP output with quality-82
+  `cwebp` encoding and reject any conversion that is not smaller than its
+  source.
 - Guarded destructive output cleanup against the filesystem root, working directory, and overlapping source trees.
 - Corrected calendar-date validation, repeated trailing slashes in `site_url`, empty blog slugs, and invalid shard indexes.
 - Replaced delimiter-fragile post index fields with escaped payloads so tabs, newlines, and comma-bearing tags remain intact.

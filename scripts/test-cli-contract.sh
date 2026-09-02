@@ -133,12 +133,14 @@ assert_standard_config_build() {
 	assert_path_exists "$output_dir/robots.txt"
 	assert_path_exists "$output_dir/llms.txt"
 	assert_path_exists "$output_dir/sitemap.xml"
+	assert_path_exists "$output_dir/sitemap.xsl"
 	assert_path_exists "$output_dir/feed/index.xml"
 	assert_file_contains "$output_dir/index.html" '<title>Kujo SSG Starter Site</title>'
 	assert_file_contains "$output_dir/index.html" 'A complete starter that showcases pages, posts, custom types, and taxonomies.'
 	assert_file_contains "$output_dir/robots.txt" 'Allow: /'
 	assert_file_contains "$output_dir/llms.txt" "$site_url/sitemap.xml"
 	assert_file_contains "$output_dir/sitemap.xml" "$site_url/$blog_slug/"
+	assert_file_contains "$output_dir/sitemap.xml" '<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>'
 	assert_file_contains "$output_dir/feed/index.xml" '<title>Kujo SSG Starter Site</title>'
 }
 
@@ -438,6 +440,7 @@ EOF
 	assert_path_missing output-suppressed/robots.txt
 	assert_path_missing output-suppressed/llms.txt
 	assert_path_missing output-suppressed/sitemap.xml
+	assert_path_missing output-suppressed/sitemap.xsl
 	assert_path_missing output-suppressed/feed/index.xml
 
 	# Draft preview: drafts are excluded by default and included with --drafts.

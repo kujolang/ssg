@@ -7,6 +7,8 @@ source "$REPO_ROOT/scripts/test_helpers.sh"
 
 assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '# Kujo SSG current capability matrix'
 assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Local featured-image containment | Supported |'
+assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Size-optimized featured-image WebP conversion | Supported |'
+assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Browser-readable sitemap stylesheet | Supported |'
 assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Delimiter-aware frontmatter | Supported |'
 assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| DocGen-to-SSG Markdown bridge | Supported |'
 assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Reusable docs-site starter package | Supported |'

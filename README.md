@@ -16,7 +16,8 @@ It fits the Clarity / Context / Control story by keeping content models, routes,
 - Renders full SEO metadata from frontmatter: canonical, Open Graph, Twitter Card, JSON-LD, absolute social images, and `article:*` tags
 - Parses and formats dates, with RFC-822 RSS `pubDate`/`lastBuildDate` and sitemap `lastmod`
 - Generates paginated home/blog listings with configurable sort order
-- Produces `sitemap.xml`, `robots.txt`, `feed/index.xml`, `llms.txt`, `404.html`, and `favicon.svg`
+- Produces `sitemap.xml` with a readable browser stylesheet, `robots.txt`,
+  `feed/index.xml`, `llms.txt`, `404.html`, and `favicon.svg`
 - Downloads and self-hosts any Google Font as cached `woff2`, with an offline bundled fallback
 - Supports local and remote featured-image processing with deterministic output names
 - Includes a reusable docs-site starter with docs templates, local search, DocGen update automation, and package generation
@@ -57,6 +58,7 @@ gateway; generated static pages never receive write or deploy authority. See
 ## Requirements
 
 - Kujo CLI available on your `PATH`
+- `cwebp` available on your `PATH` for size-optimized featured-image conversion
 
 ## Runtime Capabilities
 
@@ -71,12 +73,13 @@ default and you opt in per effect. A full build needs at least:
 ```bash
 kujo run --untrusted \
   --allow-fs-read --allow-fs-write --allow-fs-delete \
-  --allow-clock --allow-net-client \
+  --allow-clock --allow-net-client --allow-process-exec \
   ./build.kujo -- --site-url https://example.com --fonts "Roboto,Lato"
 ```
 
 (`--allow-net-client` is only needed when the build downloads Google Fonts or
-remote images; `--allow-fs-*` and `--allow-clock` are needed for every build.)
+remote images; `--allow-process-exec` enables the optional `cwebp` optimized
+image path; `--allow-fs-*` and `--allow-clock` are needed for every build.)
 
 Note: passing any single `--allow-*` flag switches the runtime out of trusted
 mode, so you must then enumerate every capability the build uses (filesystem
@@ -511,11 +514,17 @@ For most teams, the fastest path to a working site is:
   content root, assets root, or the content file's directory; traversal and
   symlink escapes are rejected with a source-file warning
 - Processed assets are written to `output/images/` with deterministic names
-- Raster images are converted to WebP when possible
-- If conversion fails, Kujo SSG falls back to the original extension
+- Raster images are encoded as lossy WebP at quality 82 through `cwebp` when it
+  is available. Install the standard `webp` package (`brew install webp` on
+  macOS or `apt install webp` on Debian/Ubuntu) for the optimized path.
+- A generated WebP is accepted only when it is smaller than its source. If the
+  optimized encoder is unavailable or conversion does not reduce bytes, Kujo
+  SSG safely falls back to the original extension instead of publishing a
+  larger lossless WebP.
 - Remote images are only downloaded when `download_remote_images: true` or `--download-remote-images` is enabled
 
-For deterministic CI and release builds, leave remote downloads disabled unless the build explicitly needs mirrored remote assets.
+For deterministic CI and release builds, install `cwebp` and leave remote
+downloads disabled unless the build explicitly needs mirrored remote assets.
 
 An unresolved or rejected local image is omitted rather than emitted as a raw
 path in generated HTML.
