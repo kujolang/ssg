@@ -74,7 +74,7 @@ main() {
 	bash scripts/test-docs-template.sh
 	bash scripts/test-docs-contract.sh
 	bash scripts/test-ability-contract.sh
-	"$KUJO_BIN" run tests/ability_pack_tests.kujo --interpreter
+	bash scripts/test-ability-pack-integration.sh
 	"$KUJO_BIN" run ./build.kujo -- --site-url https://example.com
 	./scripts/validate-generated-output.sh output
 	echo "CI checks passed"

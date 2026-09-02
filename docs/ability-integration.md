@@ -10,9 +10,10 @@ Install the dependency with Kennel, then run the offline pack contract:
 kennel validate
 kennel install
 kujo run tests/ability_pack_tests.kujo --interpreter
+KUJO_BIN="$(command -v kujo)" bash scripts/test-ability-pack-integration.sh
 ```
 
-The test initializes all three bindings, executes a read, rejects an escaping path and a spoofed loopback hostname, verifies that build pauses for approval, and checks canonical approval, receipt, and idempotency evidence. CI checks out the exact Ability commit recorded in both `kennel.toml` and `kennel.lock`, so it does not float with the upstream default branch.
+The fast test initializes all three bindings, executes a read, rejects an escaping path and a spoofed loopback hostname, verifies that build pauses for approval, and checks canonical approval, receipt, and idempotency evidence. The integration wrapper also builds the repository's deterministic starter fixture through the approved Ability binding, validates the generated output, and removes it on exit. CI checks out the exact Ability commit recorded in both `kennel.toml` and `kennel.lock`, so it does not float with the upstream default branch.
 
 The generated static site must not execute these operations. Public WebMCP stays same-origin and read-only. Codex, Cursor, VS Code, Kujo Pi, Agents SDK, and other MCP hosts should connect to a trusted local process or authenticated application gateway that owns identity, authorization, hard timeout and cancellation, receipts, and audit storage.
 

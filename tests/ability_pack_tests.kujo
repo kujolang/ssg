@@ -69,4 +69,28 @@ spoofed_result = execute_ssg_ability(registry, spoofed_loopback, approved_servic
 assert(spoofed_result["ok"] == false, "HTTP hostnames that merely start with localhost must be rejected")
 assert(spoofed_result["receipt"]["error"]["code"] == "invalid_site_url", "loopback hostname rejection must survive in the canonical receipt")
 
+if env("SSG_ABILITY_REAL_BUILD") == "1" {
+	real_registry_result := create_ssg_ability_registry(".", env("KUJO_BIN"))
+	assert(real_registry_result["ok"], "real SSG Ability registry must initialize")
+	real_invocation := make_ssg_ability_invocation(build_definition, {"site_url": "https://ability-fixture.example.test", "output": "output-ability-conformance", "minify": false}, "build-real-1", "build-real-key-1")
+	real_invocation["definition_digest"] := ability_definition_digest(build_definition)["digest"]
+	real_approval := {
+		"schema": "kujo.ability.approval/v1",
+		"approval_id": "approval-ssg-real",
+		"binding_digest": approval_binding_digest(real_invocation),
+		"approved_by": {"type": "user", "id": "approver-real", "tenant_id": "local", "claims": {}},
+		"issued_at_ms": 900,
+		"expires_at_ms": 1100,
+		"nonce": "nonce-ssg-real",
+		"evidence": {"source": "fixture-conformance"}
+	}
+	real_invocation["approval"] := real_approval
+	real_result := execute_ssg_ability(real_registry_result["registry"], real_invocation, approved_services)
+	assert(real_result["ok"], "approved real SSG fixture build must execute")
+	assert(real_result["receipt"]["status"] == "succeeded", "real fixture build must produce a succeeded receipt")
+	assert(path_is_file("output-ability-conformance/index.html"), "real fixture build must emit its home page")
+	assert(path_is_file("output-ability-conformance/sitemap.xml"), "real fixture build must emit its sitemap")
+	assert(contains(read_file("output-ability-conformance/sitemap.xml"), "https://ability-fixture.example.test/about/"), "real fixture sitemap must preserve the approved origin")
+}
+
 print("SSG executable Ability pack contract passed")
