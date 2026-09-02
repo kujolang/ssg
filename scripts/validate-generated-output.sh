@@ -57,14 +57,10 @@ if [[ -f "$OUT_DIR/sitemap.xml" ]]; then
 	if ! grep -q '<urlset' "$OUT_DIR/sitemap.xml"; then
 		record_failure "FAIL sitemap-format: $OUT_DIR/sitemap.xml"
 	fi
-	if ! grep -Fq '<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>' "$OUT_DIR/sitemap.xml"; then
-		record_failure "FAIL sitemap-stylesheet-link: $OUT_DIR/sitemap.xml"
-	fi
-	if [[ ! -f "$OUT_DIR/sitemap.xsl" ]] || ! grep -q '<xsl:stylesheet' "$OUT_DIR/sitemap.xsl"; then
-		record_failure "FAIL sitemap-stylesheet: $OUT_DIR/sitemap.xsl"
-	fi
-elif [[ -f "$OUT_DIR/sitemap.xsl" ]]; then
-	record_failure "FAIL orphan-sitemap-stylesheet: $OUT_DIR/sitemap.xsl"
+fi
+
+if [[ -f "$OUT_DIR/sitemap.xsl" ]]; then
+	record_failure "FAIL unexpected-sitemap-stylesheet: $OUT_DIR/sitemap.xsl"
 fi
 
 if [[ -f "$OUT_DIR/feed/index.xml" ]]; then

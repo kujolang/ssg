@@ -152,7 +152,7 @@ EOF
 	assert_path_exists output/blog/page/2/index.html
 	assert_path_exists output/feed/index.xml
 	assert_path_exists output/sitemap.xml
-	assert_path_exists output/sitemap.xsl
+	assert_path_missing output/sitemap.xsl
 	assert_path_exists output/robots.txt
 	assert_path_exists output/llms.txt
 	assert_path_missing output/page/3
@@ -162,9 +162,6 @@ EOF
 	assert_file_contains output/robots.txt 'Allow: /'
 	assert_file_contains output/llms.txt 'https://example.com/sitemap.xml'
 	assert_file_contains output/sitemap.xml '<loc>https://example.com/about/</loc>'
-	assert_file_contains output/sitemap.xml '<?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>'
-	assert_file_contains output/sitemap.xsl '<xsl:stylesheet version="1.0"'
-	assert_file_contains output/sitemap.xsl 'count(sm:urlset/sm:url)'
 	assert_file_contains output/sitemap.xml '<loc>https://example.com/blog/welcome-to-kujo-ssg/</loc>'
 	assert_file_contains output/feed/index.xml '<rss version="2.0">'
 	assert_file_contains output/about/index.html '<title>About the Kujo SSG Starter | Kujo SSG Starter Site</title>'
@@ -234,7 +231,6 @@ EOF
 	assert_path_missing output/robots.txt
 	assert_path_missing output/llms.txt
 	assert_path_missing output/sitemap.xml
-	assert_path_missing output/sitemap.xsl
 	assert_path_missing output/feed/index.xml
 
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --site-url https://example.com --no-index

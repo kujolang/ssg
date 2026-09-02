@@ -3,8 +3,6 @@
 ## Unreleased
 
 ### Added
-- Added a responsive `sitemap.xsl` browser view so sitemap URLs render once in
-  a readable table instead of relying on inconsistent browser XML viewers.
 - Added a launch-readiness Spec and deterministic Eval suite for the local SSG release review.
 - Added experimental, opt-in static WebMCP v1 generation with a versioned public
   content index, four universal read-only tools, automatic custom-layout

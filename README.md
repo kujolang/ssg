@@ -16,7 +16,7 @@ It fits the Clarity / Context / Control story by keeping content models, routes,
 - Renders full SEO metadata from frontmatter: canonical, Open Graph, Twitter Card, JSON-LD, absolute social images, and `article:*` tags
 - Parses and formats dates, with RFC-822 RSS `pubDate`/`lastBuildDate` and sitemap `lastmod`
 - Generates paginated home/blog listings with configurable sort order
-- Produces `sitemap.xml` with a readable browser stylesheet, `robots.txt`,
+- Produces `sitemap.xml`, `robots.txt`,
   `feed/index.xml`, `llms.txt`, `404.html`, and `favicon.svg`
 - Downloads and self-hosts any Google Font as cached `woff2`, with an offline bundled fallback
 - Supports local and remote featured-image processing with deterministic output names

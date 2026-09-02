@@ -3172,20 +3172,6 @@ func sitemap_url_entry(site_url, route, lastmod_iso, blog_prefix) {
 	return entry
 }
 
-func sitemap_stylesheet() {
-	return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-		"<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\" xmlns:sm=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" +
-		"  <xsl:output method=\"html\" encoding=\"UTF-8\"/>\n" +
-		"  <xsl:template match=\"/\">\n" +
-		"    <html lang=\"en\"><head><meta charset=\"UTF-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><title>XML Sitemap</title>\n" +
-		"      <style>body{margin:0;background:#f8fafc;color:#172033;font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}main{max-width:1100px;margin:0 auto;padding:3rem 1.25rem}h1{margin:0 0 .5rem;font-size:2rem}p{color:#526079}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #dbe2ea;border-radius:.75rem;overflow:hidden}th,td{padding:.8rem 1rem;border-bottom:1px solid #e8edf3;text-align:left;vertical-align:top}th{background:#eef3f8;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}a{color:#1456a0;overflow-wrap:anywhere}tr:last-child td{border-bottom:0}@media(max-width:700px){th:nth-child(n+2),td:nth-child(n+2){display:none}main{padding:1.5rem .75rem}}</style>\n" +
-		"    </head><body><main><h1>XML Sitemap</h1><p>This sitemap contains <strong><xsl:value-of select=\"count(sm:urlset/sm:url)\"/></strong> URLs for search engines.</p>\n" +
-		"      <table><thead><tr><th>URL</th><th>Last modified</th><th>Change frequency</th><th>Priority</th></tr></thead><tbody>\n" +
-		"        <xsl:for-each select=\"sm:urlset/sm:url\"><tr><td><a href=\"{sm:loc}\"><xsl:value-of select=\"sm:loc\"/></a></td><td><xsl:value-of select=\"sm:lastmod\"/></td><td><xsl:value-of select=\"sm:changefreq\"/></td><td><xsl:value-of select=\"sm:priority\"/></td></tr></xsl:for-each>\n" +
-		"      </tbody></table></main></body></html>\n" +
-		"  </xsl:template>\n</xsl:stylesheet>\n"
-}
-
 func encode_post_record_field(value) {
 	encoded := to_string(value)
 	encoded = replace(encoded, "%", "%25")
@@ -4909,9 +4895,8 @@ func build_site(settings) {
 					}
 				}
 			}
-			sitemap_xml := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<?xml-stylesheet type=\"text/xsl\" href=\"sitemap.xsl\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd\">\n" + sitemap_inner + "</urlset>\n"
+			sitemap_xml := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd\">\n" + sitemap_inner + "</urlset>\n"
 			write_file(path_join(output_dir, "sitemap.xml"), sitemap_xml)
-			write_file(path_join(output_dir, "sitemap.xsl"), sitemap_stylesheet())
 		} else {
 			print("Skipping RSS and sitemap (no --site-url configured)")
 		}
