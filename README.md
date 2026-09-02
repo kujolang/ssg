@@ -38,6 +38,14 @@ It fits the Clarity / Context / Control story by keeping content models, routes,
 - SSG demonstrates static publishing and docs-site generation.
 - Lens and ShipCheck can help review and gate generated results.
 
+### Kujo Ability
+
+The repository includes canonical Ability definitions for project inspection,
+generated-output validation, and an approval-gated, idempotent build. Agent and
+MCP hosts run them through a trusted local process or authenticated application
+gateway; generated static pages never receive write or deploy authority. See
+[`docs/ability-integration.md`](docs/ability-integration.md).
+
 ## What This Repo Is Not
 
 - Not a production-certified docs platform
