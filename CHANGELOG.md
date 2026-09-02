@@ -4,6 +4,8 @@
 
 ### Added
 - Added a launch-readiness Spec and deterministic Eval suite for the local SSG release review.
+- Added an executable, commit-pinned Kujo Ability pack with local bindings for
+  project inspection, generated-output validation, and approval-gated builds.
 - Added experimental, opt-in static WebMCP v1 generation with a versioned public
   content index, four universal read-only tools, automatic custom-layout
   injection, subpath support, and deterministic full/sharded output.
