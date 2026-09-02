@@ -53,7 +53,8 @@ func run_build(root, kujo_bin, input) {
 	if safe_relative_path(output) == false { return failure("invalid_output_path", "output must be a contained relative path", {}) }
 	if valid_site_url(site_url) == false { return failure("invalid_site_url", "site_url must use HTTPS unless it is loopback", {}) }
 	command := [kujo_bin, "run", "build.kujo", "--", "--site-url", site_url, "--output", output]
-	if input["minify"] == true { command = push(command, "--minify") }
+	if has_key(input, "minify") && input["minify"] == true { command = push(command, "--minify") }
+	if has_key(input, "drafts") && input["drafts"] == true { command = push(command, "--drafts") }
 	result := spawn_process(command, {"cwd": root, "timeout_ms": 300000, "max_output_bytes": 1048576})
 	if result.exitcode != 0 { return failure("ssg_build_failed", "SSG build failed", {"exitcode": result.exitcode}) }
 	return {"ok": true, "result": {"built": true, "output": output}}

@@ -75,6 +75,15 @@ assert(built["receipt"]["status"] == "succeeded", "approved build must return a 
 assert(built["receipt"]["approval_id"] == "approval-ssg-test", "build receipt must preserve approval identity")
 assert(built["receipt"]["idempotency"]["state"] == "completed", "build receipt must preserve completed idempotency")
 
+preview_invocation := make_ssg_ability_invocation(build_definition, {"site_url": "http://127.0.0.1:4173", "output": "output-preview", "minify": false, "drafts": true}, "preview-1", "preview-key-1")
+preview_invocation["definition_digest"] := ability_definition_digest(build_definition)["digest"]
+preview_approval := approval
+preview_approval["binding_digest"] := approval_binding_digest(preview_invocation)
+preview_invocation["approval"] := preview_approval
+preview_result := execute_ssg_ability(registry, preview_invocation, approved_services)
+assert(preview_result["ok"], "approved preview build must execute through the bounded build Ability")
+assert(preview_result["receipt"]["status"] == "succeeded", "preview build must return a succeeded canonical receipt")
+
 approval["binding_digest"] := approval_binding_digest(spoofed_loopback)
 spoofed_loopback["approval"] := approval
 spoofed_result = execute_ssg_ability(registry, spoofed_loopback, approved_services)

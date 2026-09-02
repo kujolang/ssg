@@ -9,7 +9,8 @@
     "properties": {
       "site_url": { "type": "string", "minLength": 1, "maxLength": 2048 },
       "output": { "type": "string", "minLength": 1, "maxLength": 1024 },
-      "minify": { "type": "boolean" }
+      "minify": { "type": "boolean" },
+      "drafts": { "type": "boolean" }
     },
     "additionalProperties": false
   },
