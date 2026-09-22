@@ -304,7 +304,7 @@ robots: public
 llms: public
 watch: false
 minify: false
-webmcp: false
+webmcp: true
 download_remote_images: false
 no_index: false
 no_aux: false
@@ -341,7 +341,8 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--minify`: emit minified CSS/JS assets
 - `--download-remote-images`: mirror remote `featured_image` URLs into output (needs outbound network — see [Runtime Capabilities](#runtime-capabilities))
 - `--drafts`: include `draft: true` content in the build (preview/staging workflow); omitted by default
-- `--webmcp`: enable the experimental static WebMCP v1 index and browser tools; disabled by default
+- `--webmcp`: enable the experimental static WebMCP v1 index and browser tools (the default)
+- `--no-webmcp`: disable WebMCP generation for a build
 - `--blog-slug <slug>`: blog route base. Set `blog_slug: ""` in config to omit the blog route and publish posts at the site root.
 - `--posts-at-root`: keep post permalinks at `/<slug>/` while retaining the blog listing under `/<blog_slug>/`
 - `--init <yml|yaml|json>`: scaffold starter config
@@ -410,18 +411,21 @@ default.
 
 ## Experimental WebMCP
 
-Kujo can compile public content for browser agents as an experimental, opt-in
-static build target:
+Kujo compiles public content for browser agents as an experimental static build
+target by default. Keep or add the explicit setting:
 
 ```yaml
 webmcp: true
 ```
 
-or:
+The equivalent explicit CLI flag is:
 
 ```bash
 kujo run ./build.kujo -- --webmcp
 ```
+
+Use `webmcp: false` or `--no-webmcp` when a site must omit the public index and
+browser adapter.
 
 The build adds a versioned public JSON index and a small same-origin JavaScript
 adapter. It registers exactly `get_site_info`, `search_site`, `list_content`,

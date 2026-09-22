@@ -1,9 +1,9 @@
 # Experimental WebMCP v1
 
-Kujo compiles your content for humans and agents. WebMCP v1 is an explicitly
-experimental, opt-in static build target; it is disabled by default.
+Kujo compiles your content for humans and agents. WebMCP v1 is an experimental
+static build target enabled by default.
 
-## Enable it
+## Configure it
 
 Add one boolean to `kujo-ssg.yml`, `.yaml`, or `.json`:
 
@@ -11,10 +11,16 @@ Add one boolean to `kujo-ssg.yml`, `.yaml`, or `.json`:
 webmcp: true
 ```
 
-Or enable it for one build:
+Or enable it explicitly for one build:
 
 ```bash
 kujo run ./build.kujo -- --webmcp
+```
+
+Disable it for a site with `webmcp: false`, or for one build with:
+
+```bash
+kujo run ./build.kujo -- --no-webmcp
 ```
 
 CLI values retain normal precedence over the first discovered config. No

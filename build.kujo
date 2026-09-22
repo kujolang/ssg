@@ -43,7 +43,8 @@ func print_help() {
 		"  --minify                      Generate minified CSS/JS",
 		"  --download-remote-images      Download remote featured images",
 		"  --drafts                      Include draft content (preview builds)",
-		"  --webmcp                     Enable experimental static WebMCP tools",
+		"  --webmcp                     Enable experimental static WebMCP tools (default)",
+		"  --no-webmcp                  Disable experimental static WebMCP tools",
 		"  --blog-slug <slug>            Blog root slug (default: blog)",
 		"  --posts-at-root               Keep post permalinks at /<slug>/",
 		"  --init <yml|yaml|json>        Bootstrap starter project",
@@ -75,7 +76,7 @@ func default_settings() {
 		"minify": false,
 		"download_remote_images": false,
 		"drafts": false,
-		"webmcp": false,
+		"webmcp": true,
 		"blog_slug": "blog",
 		"posts_at_root": false,
 		"no_index": false,
@@ -3265,7 +3266,7 @@ func create_sample_config(format_name) {
 		"llms": "public",
 		"minify": false,
 		"download_remote_images": false,
-		"webmcp": false,
+		"webmcp": true,
 		"watch": false
 	}
 
@@ -3431,6 +3432,11 @@ func apply_cli_overrides(settings, cli_args) {
 			i := i + 1
 			continue
 		}
+		if token == "--no-webmcp" {
+			settings["webmcp"] = false
+			i := i + 1
+			continue
+		}
 		if token == "--posts-at-root" {
 			settings["posts_at_root"] = true
 			i := i + 1
@@ -3588,7 +3594,7 @@ func normalize_settings(settings) {
 		{"key": "minify", "fallback": false},
 		{"key": "download_remote_images", "fallback": false},
 		{"key": "drafts", "fallback": false},
-		{"key": "webmcp", "fallback": false},
+		{"key": "webmcp", "fallback": true},
 		{"key": "posts_at_root", "fallback": false},
 		{"key": "no_index", "fallback": false},
 		{"key": "no_aux", "fallback": false},

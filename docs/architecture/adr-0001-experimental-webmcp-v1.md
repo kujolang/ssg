@@ -2,14 +2,16 @@
 
 - Status: accepted, experimental
 - Decision date: 2026-08-26
+- Default-on amendment: 2026-09-22
 - Research baseline: `346e76d`
 
 ## Decision
 
-Kujo SSG will expose WebMCP as an explicitly opt-in, read-only, same-origin,
-static-only build target. The default remains disabled. Enabling `webmcp: true`
-or `--webmcp` generates a versioned public site index, a small self-hosted
-browser adapter, and one external script reference on generated content pages.
+Kujo SSG exposes WebMCP as a read-only, same-origin, static-only build target.
+It is enabled by default. `webmcp: true` or `--webmcp` makes that choice
+explicit; `webmcp: false` or `--no-webmcp` opts out. An enabled build generates
+a versioned public site index, a small self-hosted browser adapter, and one
+external script reference on generated content pages.
 
 The browser adapter is progressive enhancement. Browsers without
 `document.modelContext` stop before fetching the index or changing the page.
@@ -36,7 +38,7 @@ produce the same bytes.
 
 ## Consequences
 
-- Disabled output must remain byte-identical to the pre-feature baseline.
+- Explicitly disabled output must remain byte-identical to the pre-feature baseline.
 - `--no-aux` and `--no-index` do not suppress an explicitly enabled WebMCP
   build target.
 - V1 makes no cross-origin requests, mutations, authentication claims, or

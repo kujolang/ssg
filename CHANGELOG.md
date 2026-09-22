@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Enabled static WebMCP generation by default for new and unconfigured sites,
+  with `webmcp: false` and `--no-webmcp` as explicit opt-outs.
 - Added a launch-readiness Spec and deterministic Eval suite for the local SSG release review.
 - Added an executable, commit-pinned Kujo Ability pack with local bindings for
   ten bounded project, source, build, output-inspection, readiness, comparison,

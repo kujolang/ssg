@@ -92,17 +92,28 @@ EOF
 
 pushd "$TEMP_SITE" >/dev/null
 
-# No config and explicit false produce identical public bytes and no artifacts.
-run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output disabled-default --content content --templates templates --assets assets --site-url https://example.test/docs --no-aux --no-aliases
-assert_path_missing disabled-default/.well-known/kujo-site-index.json
-assert_file_not_contains disabled-default/about/index.html 'data-kujo-webmcp'
+# No config enables WebMCP by default.
+run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output enabled-default --content content --templates templates --assets assets --site-url https://example.test/docs --no-aux --no-aliases
+assert_path_exists enabled-default/.well-known/kujo-site-index.json
+assert_file_contains enabled-default/about/index.html 'data-kujo-webmcp'
+
+# Config and CLI opt-outs both preserve the WebMCP-disabled output.
 cat > kujo-ssg.yml <<'EOF'
 webmcp: false
 EOF
 run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output disabled-false --content content --templates templates --assets assets --site-url https://example.test/docs --no-aux --no-aliases
-diff -ru disabled-default disabled-false
+assert_path_missing disabled-false/.well-known/kujo-site-index.json
+assert_file_not_contains disabled-false/about/index.html 'data-kujo-webmcp'
+cat > kujo-ssg.yml <<'EOF'
+webmcp: true
+EOF
+run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output disabled-cli --content content --templates templates --assets assets --site-url https://example.test/docs --no-webmcp --no-aux --no-aliases
+diff -ru disabled-false disabled-cli
 
 # YAML false overridden by CLI; all interaction flags remain independent.
+cat > kujo-ssg.yml <<'EOF'
+webmcp: false
+EOF
 run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output enabled --content content --templates templates --assets assets --site-url https://example.test/docs --webmcp --drafts --minify --no-aux --no-index --no-aliases
 assert_path_exists enabled/.well-known/kujo-site-index.json
 assert_path_exists enabled/assets/js/kujo-webmcp.js

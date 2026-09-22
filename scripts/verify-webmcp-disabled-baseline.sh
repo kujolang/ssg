@@ -23,7 +23,7 @@ build_and_check() {
 	local name="$1"
 	shift
 	local output="$TEMP_ROOT/$name"
-	"$KUJO_BIN" run "$REPO_ROOT/build.kujo" -- --output "$output" "$@" >/dev/null
+	"$KUJO_BIN" run "$REPO_ROOT/build.kujo" -- --output "$output" --no-webmcp "$@" >/dev/null
 	local actual expected
 	actual="$(tree_fingerprint "$output")"
 	expected="$(awk -v name="$name" '$1 == name {sub("^" name " ", ""); print; exit}' "$BASELINE")"
@@ -43,7 +43,7 @@ build_and_check no-aux --no-aux
 build_and_check no-index --no-index
 build_and_check posts-root --posts-at-root
 
-KUJO_BIN="$KUJO_BIN" bash scripts/build-parallel.sh 2 2 --output "$TEMP_ROOT/parallel" >/dev/null
+KUJO_BIN="$KUJO_BIN" bash scripts/build-parallel.sh 2 2 --output "$TEMP_ROOT/parallel" --no-webmcp >/dev/null
 parallel_actual="$(tree_fingerprint "$TEMP_ROOT/parallel")"
 parallel_expected="$(awk '$1 == "parallel" {sub("^parallel ", ""); print; exit}' "$BASELINE")"
 if [[ "$parallel_actual" != "$parallel_expected" ]]; then
