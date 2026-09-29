@@ -14,6 +14,7 @@
   injection, subpath support, and deterministic full/sharded output.
 
 ### Fixed
+- Create the Ability integration test workspace on fresh checkouts so CI does not depend on an ignored `tmp/` directory.
 - Emit plain sitemap XML without a stylesheet dependency.
 - Hardened Ability path, URL, approval, bounded-process, and artifact-export boundaries; added approved draft previews.
 - Replaced oversized lossless featured-image WebP output with quality-82

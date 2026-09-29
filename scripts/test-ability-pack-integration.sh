@@ -23,6 +23,7 @@ if [[ -z "${KUJO_BIN:-}" || ! -x "$KUJO_BIN" ]]; then
 fi
 
 rm -rf -- "$output_dir"
+mkdir -p "$repo_root/tmp"
 helper_tmp="$(mktemp -d "$repo_root/tmp/ability-helper-test.XXXXXX")"
 cd "$repo_root"
 SSG_ABILITY_REAL_BUILD=1 "$KUJO_BIN" run tests/ability_pack_tests.kujo --interpreter
