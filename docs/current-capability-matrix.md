@@ -10,7 +10,9 @@ has been superseded.
 | Pages, posts, collections, drafts, pagination, metadata, and auxiliary outputs | Validated | `scripts/test-generated-contract.sh` and `scripts/validate-generated-output.sh` |
 | Local featured-image containment | Supported | `scripts/test-generated-contract.sh` rejects an escaping path and retains normal local-image processing |
 | Size-optimized featured-image WebP conversion | Supported | `scripts/test-generated-contract.sh` verifies RIFF/WebP bytes and requires the generated fixture image to be smaller than its JPEG source |
-| Browser-readable sitemap stylesheet | Supported | Generated-output and CLI contracts require the `sitemap.xsl` artifact and XML stylesheet link |
+| Plain sitemap XML | Supported | Generated-output and CLI contracts require XML without a stylesheet dependency |
+| Experimental WebMCP v1 | Enabled by default; explicit opt-out | `scripts/test-webmcp-contract.sh` and `scripts/test-webmcp-runtime.js` |
+| Local Ability pack 1.0.0 | Ten bounded workflows; no deployment authority | `scripts/test-ability-contract.sh` and `scripts/test-ability-pack-integration.sh` |
 | Delimiter-aware frontmatter | Supported | `scripts/test-generated-contract.sh` covers quoted/body literal dashes and unclosed-delimiter diagnostics |
 | Taxonomy lookup/rendering | Supported | `scripts/test-generated-contract.sh` asserts rendered custom taxonomy labels |
 | DocGen-to-SSG Markdown bridge | Supported | `scripts/test-docgen-ssg-bridge.sh` covers deterministic Markdown conversion, frontmatter, gates, stale cleanup, and path containment |

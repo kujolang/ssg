@@ -1,5 +1,7 @@
 # WebMCP security and privacy requirements
 
+> Historical research baseline (August 2026). SSG 1.1.0 enables experimental WebMCP by default; see [the amended ADR](../../architecture/adr-0001-experimental-webmcp-v1.md) and [current usage](../../webmcp.md).
+
 ## Security decision
 
 The experimental MVP is read-only, same-origin, public-data-only, externally scripted, and lazy-loaded. No automatic forms, cross-origin exposure, remote fetches, authentication, or write actions.

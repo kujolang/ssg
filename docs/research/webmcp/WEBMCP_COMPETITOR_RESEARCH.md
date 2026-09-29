@@ -1,5 +1,7 @@
 # WebMCP competitor and ecosystem research
 
+> Historical research baseline (August 2026). SSG 1.1.0 enables experimental WebMCP by default; see [the amended ADR](../../architecture/adr-0001-experimental-webmcp-v1.md) and [current usage](../../webmcp.md).
+
 Checked: 2026-08-26. Evidence categories are explicit because absence is hard to prove and WebMCP is moving quickly.
 
 ## Method

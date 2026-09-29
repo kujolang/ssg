@@ -1,5 +1,7 @@
 # Proposed universal WebMCP tool surface
 
+> Historical research baseline (August 2026). SSG 1.1.0 enables experimental WebMCP by default; see [the amended ADR](../../architecture/adr-0001-experimental-webmcp-v1.md) and [current usage](../../webmcp.md).
+
 Decision: four read-only imperative tools. The goal is minimum overlap, bounded output, and universal content-site value.
 
 Common rules:

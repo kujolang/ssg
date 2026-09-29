@@ -20,7 +20,7 @@ This gate verifies:
 
 ## Release Checklist
 
-1. Update `CHANGELOG.md` for the current `VERSION` in `build.kujo`.
+1. Align `build.kujo`, `kennel.toml`, the README badge, the Ability inspection result, and the CLI version contract. Record the release in `CHANGELOG.md`. Ability definition, handler, and pack versions remain independent.
 2. Run `bash scripts/run_release_gate.sh`.
 3. Review generated output changes if content, templates, or output contracts changed.
 4. Push only after the release gate passes cleanly.
@@ -28,3 +28,9 @@ This gate verifies:
 ## Runtime Note
 
 CI and release validation now execute `kujo run ./build.kujo` directly. If you are debugging a future Kujo regression, compare that VM path against interpreter mode manually, but the release gate no longer depends on `--interpreter`.
+
+## Publish and synchronize
+
+After the gate passes, commit and push the release, create its annotated `v<version>` tag, and publish a GitHub Release with the matching changelog notes. Tag pushes alone do not publish a Kennel package.
+
+Update the SSG ecosystem page in `kujolang/kujolang.ai`, the showcase and release inventory in `kujolang/docs.kujolang.ai`, and the docs workflow's immutable SSG revision. Build and verify both sites, then deploy through their documented Pages flows. Refresh `kujolang/kujolang-mcp` from the committed website source, update its build-input pin, regenerate and validate the Worker, deploy, and verify live catalog parity. Dispatch the Kennel registry release reconciler for the published release and verify its exact-version metadata and archive.

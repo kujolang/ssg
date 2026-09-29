@@ -1,5 +1,7 @@
 # Experimental WebMCP implementation plan
 
+> Historical research baseline (August 2026). SSG 1.1.0 enables experimental WebMCP by default; see [the amended ADR](../../architecture/adr-0001-experimental-webmcp-v1.md) and [current usage](../../webmcp.md).
+
 This plan is authorized by the GO-with-reduced-scope research decision. It deliberately contains no implementation in this task.
 
 ## Delivery principle
