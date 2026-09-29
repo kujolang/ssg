@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 - 2026-09-29
 
 ### Added
 - Enabled static WebMCP generation by default for new and unconfigured sites,
@@ -9,11 +9,13 @@
 - Added an executable, commit-pinned Kujo Ability pack with local bindings for
   ten bounded project, source, build, output-inspection, readiness, comparison,
   and deterministic artifact-export workflows.
-- Added experimental, opt-in static WebMCP v1 generation with a versioned public
+- Added experimental static WebMCP v1 generation with a versioned public
   content index, four universal read-only tools, automatic custom-layout
   injection, subpath support, and deterministic full/sharded output.
 
 ### Fixed
+- Emit plain sitemap XML without a stylesheet dependency.
+- Hardened Ability path, URL, approval, bounded-process, and artifact-export boundaries; added approved draft previews.
 - Replaced oversized lossless featured-image WebP output with quality-82
   `cwebp` encoding, rejecting any conversion that is not smaller than its
   source.

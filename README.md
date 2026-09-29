@@ -1,6 +1,6 @@
 # SSG
 
-[![Version](https://img.shields.io/badge/version-1.0.0-black)](https://github.com/kujolang/ssg)
+[![Version](https://img.shields.io/badge/version-1.1.0-black)](https://github.com/kujolang/ssg)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
 
@@ -9,6 +9,15 @@ Local static-site generation showcase for Kujo projects, built around a single e
 `SSG` is designed for teams that want deterministic builds, straightforward template overrides, and a transparent content pipeline. Content, templates, assets, metadata, feeds, and validation stay visible in the repository instead of disappearing behind framework abstractions.
 
 It fits the Clarity / Context / Control story by keeping content models, routes, feeds, and validation predictable, surfacing generated artifacts and metadata as context, and making builds and release checks local and reviewable.
+
+## Release 1.1.0
+
+[SSG 1.1.0](https://github.com/kujolang/ssg/releases/tag/v1.1.0) adds experimental
+WebMCP enabled by default, ten local Ability workflows, and safer output cleanup,
+metadata handling, and featured-image conversion. Existing sites can disable the
+public agent index with `webmcp: false` or `--no-webmcp`. The Ability pack remains
+version 1.0.0 and uses the pinned Ability 1.0.1 runtime; its contracts are versioned
+independently of the generator. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Highlights
 

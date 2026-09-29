@@ -11,7 +11,7 @@ func safe_relative_path(value) {
 
 func run_inspect(root) {
 	return {"ok": true, "result": {
-		"version": "1.0.0",
+		"version": "1.1.0",
 		"configuration": "kujo-ssg.yml",
 		"content_exists": path_is_dir(path_join(root, "content")),
 		"output_exists": path_is_dir(path_join(root, "output"))

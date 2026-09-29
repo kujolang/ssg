@@ -1,6 +1,6 @@
 [package]
 name = "ssg"
-version = "1.0.0"
+version = "1.1.0"
 description = "Deterministic static-site generation and Ability pack for Kujo."
 license = "MIT"
 authors = ["Kujolang <contact@kujolang.ai>"]
