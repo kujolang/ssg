@@ -55,4 +55,11 @@ if python3 scripts/ability-inspect.py output-inspect "${helper_tmp#$repo_root/}/
 	echo "ERROR: SSG Ability helper followed a symbolic-link output root"
 	exit 1
 fi
+truncate -s 67108865 "$output_dir/oversized-output.bin"
+if python3 scripts/ability-inspect.py output-inspect output-ability-conformance >"$helper_tmp/oversized.json" 2>&1; then
+	echo "ERROR: SSG Ability helper accepted an oversized output file"
+	exit 1
+fi
+grep -Fq '"code":"file_size_limit_exceeded"' "$helper_tmp/oversized.json"
+rm -f -- "$output_dir/oversized-output.bin"
 echo "SSG Ability fixture integration passed"

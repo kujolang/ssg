@@ -14,6 +14,9 @@ from pathlib import Path
 MAX_FILES = 10_000
 MAX_DETAILS = 200
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
+MAX_OUTPUT_FILE_BYTES = 64 * 1024 * 1024
+MAX_OUTPUT_TOTAL_BYTES = 512 * 1024 * 1024
+HASH_CHUNK_BYTES = 1024 * 1024
 LINK_RE = re.compile(r'''(?:href|src)=["']([^"'#?]+)''', re.IGNORECASE)
 
 
@@ -50,6 +53,14 @@ def files_under(directory: Path, suffixes: tuple[str, ...] | None = None) -> lis
     return files
 
 
+def hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(HASH_CHUNK_BYTES):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def source_list(root: Path) -> dict:
     content = safe_dir(root, "content")
     records = []
@@ -84,9 +95,16 @@ def source_validate(root: Path) -> dict:
 def output_manifest(root: Path, raw: str) -> tuple[Path, list[dict]]:
     output = safe_dir(root, raw)
     records = []
+    total_bytes = 0
     for path in files_under(output):
-        data = path.read_bytes()
-        records.append({"path": path.relative_to(output).as_posix(), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+        relative = path.relative_to(output).as_posix()
+        size = path.stat().st_size
+        if size > MAX_OUTPUT_FILE_BYTES:
+            fail("file_size_limit_exceeded", f"Generated output file exceeds {MAX_OUTPUT_FILE_BYTES} bytes", [relative])
+        total_bytes += size
+        if total_bytes > MAX_OUTPUT_TOTAL_BYTES:
+            fail("total_size_limit_exceeded", f"Generated output exceeds {MAX_OUTPUT_TOTAL_BYTES} bytes", [relative])
+        records.append({"path": relative, "bytes": size, "sha256": hash_file(path)})
     return output, records
 
 
@@ -169,8 +187,8 @@ def export_artifact(root: Path, output_raw: str, artifact_raw: str) -> dict:
             info.uname = info.gname = ""
             with path.open("rb") as handle:
                 archive.addfile(info, handle)
-    data = artifact.read_bytes()
-    return {"operation": "artifact_export", "artifact": artifact.relative_to(root).as_posix(), "file_count": len(records), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "details": []}
+    artifact_size = artifact.stat().st_size
+    return {"operation": "artifact_export", "artifact": artifact.relative_to(root).as_posix(), "file_count": len(records), "bytes": artifact_size, "sha256": hash_file(artifact), "details": []}
 
 
 def main() -> None:
