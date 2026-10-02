@@ -358,6 +358,19 @@ func custom_slug_override(meta) {
 	return clean_slug(candidate)
 }
 
+func template_override_name(value, source_file) {
+	candidate := trim(to_string(value))
+	if len(candidate) == 0 {
+		return ""
+	}
+	invalid := regex_replace(candidate, "[a-zA-Z0-9_-]+", "")
+	if len(candidate) > 80 || len(invalid) > 0 {
+		print("Warning: Ignored unsafe template override in " + source_file + ": " + candidate)
+		return ""
+	}
+	return candidate
+}
+
 func markdown_files(directory) {
 	files := []
 	if !path_exists(directory) || !path_is_dir(directory) {
@@ -373,6 +386,10 @@ func markdown_files(directory) {
 		entry := entries[entry_idx]
 		entry_idx := entry_idx + 1
 		full_path := path_join(directory, entry)
+		if path_is_symlink(full_path) {
+			print("Warning: Skipped symlink while scanning content: " + full_path)
+			continue
+		}
 		if path_is_dir(full_path) && starts_with(entry, ".") == false {
 			child_files := markdown_files(full_path)
 			child_idx := 0
@@ -4041,7 +4058,7 @@ func build_site(settings) {
 				"taxonomies": page_public_taxonomies,
 				"taxonomies_html": page_custom_taxonomies_html,
 			"body": parsed["body"],
-				"template": trim(to_string(meta["template"])),
+				"template": template_override_name(meta["template"], page_file),
 				"draft": parse_bool_value(meta["draft"], false),
 				"nav_hide": parse_bool_value(meta["nav_hide"], false),
 				"date": trim(to_string(meta["date"])),
@@ -4287,7 +4304,7 @@ func build_site(settings) {
 		}
 
 		selected_post_template := post_template
-		custom_template_name := trim(to_string(meta["template"]))
+		custom_template_name := template_override_name(meta["template"], post_file)
 		if len(custom_template_name) > 0 {
 			custom_post_template := path_join(templates_dir, "post-" + custom_template_name + ".html")
 			if path_exists(custom_post_template) {
@@ -4545,7 +4562,7 @@ func build_site(settings) {
 			route := collection_slug + "/" + slug + "/"
 
 			selected_collection_template := default_collection_item_template
-			custom_template_name := trim(to_string(meta["template"]))
+			custom_template_name := template_override_name(meta["template"], item_file)
 			if len(custom_template_name) > 0 {
 				custom_collection_template := path_join(templates_dir, "post-" + custom_template_name + ".html")
 				if path_exists(custom_collection_template) {

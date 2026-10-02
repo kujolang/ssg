@@ -110,6 +110,24 @@ description: Escaped frontmatter text
 
 # Safe body
 EOF
+	cat > "$temp_dir/site/content/pages/unsafe-template.md" <<'EOF'
+---
+title: Unsafe Template Override
+template: x/../../outside
+---
+
+# Default template remains active
+EOF
+	cat > "$temp_dir/outside-content.md" <<'EOF'
+---
+title: Outside Content
+---
+
+OUTSIDE-CONTENT-MARKER
+EOF
+	ln -s "$temp_dir/outside-content.md" "$temp_dir/site/content/pages/outside-content.md"
+	mkdir -p "$temp_dir/site/templates/page-x"
+	printf '%s\n' 'OUTSIDE-TEMPLATE-MARKER' > "$temp_dir/site/outside.html"
 
 	pushd "$temp_dir/site" >/dev/null
 
@@ -143,11 +161,16 @@ EOF
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT"
 	assert_output_contains "Build complete"
 	assert_output_contains "Warning: Skipped symlink while copying assets: assets/css/outside-link.css"
+	assert_output_contains "Warning: Skipped symlink while scanning content: content/pages/outside-content.md"
+	assert_output_contains "Warning: Ignored unsafe template override in content/pages/unsafe-template.md: x/../../outside"
 	assert_path_exists "$temp_dir/outside-output/preserve-me"
 	assert_path_missing output/assets/css/outside-link.css
 
 	# 3: output cleanup and asset copying never follow symlinks outside their roots.
 	assert_path_missing output/outside-link
+	assert_path_missing output/outside-content
+	assert_file_contains output/unsafe-template/index.html 'Default template remains active'
+	assert_file_not_contains output/unsafe-template/index.html 'OUTSIDE-TEMPLATE-MARKER'
 
 	# 4: empty blog_slug keeps posts at root instead of creating /untitled/.
 	assert_path_exists output/control-record/index.html
