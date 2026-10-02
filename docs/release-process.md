@@ -16,6 +16,8 @@ This gate verifies:
 - the presence of a matching changelog entry in `CHANGELOG.md`
 - the full local CI gate in `scripts/run_ci_checks.sh`
 - the deterministic WebMCP config, index, privacy, runtime, layout, and parallel-build contracts
+- frozen WebMCP-disabled fingerprints for normal, minified, auxiliary-suppressed,
+  index-suppressed, root-post, and parallel builds
 - it does not deploy or publish the site for you
 
 ## Release Checklist

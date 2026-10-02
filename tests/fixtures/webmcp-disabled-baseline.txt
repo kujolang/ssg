@@ -1,12 +1,13 @@
-# Frozen from commit 346e76de9e6212ec4899860c3071762e111cc006 on 2026-08-26.
+# Refreshed on 2026-10-02 after the validated featured-image optimization and
+# hardening passes intentionally changed generated image bytes.
 # Aggregate SHA-256 hashes are computed from sorted `<file-sha>  <relative-path>` lines.
 # The canonical site already exercises custom templates and custom collections.
-normal files=82 bytes=20533267 sha256=dc3e7de3370c37e740aa5f6a32e9066dcec0b088e08c8983b434494ac5981b51
-minified files=82 bytes=20533267 sha256=dc3e7de3370c37e740aa5f6a32e9066dcec0b088e08c8983b434494ac5981b51
-no-aux files=78 bytes=20523592 sha256=2ed785316b0827158317915ac8029bb05a4141deded5180a89fc61d480175bb7
-no-index files=75 bytes=20478016 sha256=8d9640ce2f80a83f97f150b8ffc20f2426d238bb49b2a4641d4f87d57429a7fc
-posts-root files=82 bytes=20532503 sha256=2b4124ed6f04920c37d48d3e9ba633ba9291615e73ca0a6689a984e77076b85d
-parallel files=82 bytes=20533267 sha256=802e193dfee4c369b24e03c70af1c9b054a6f0631776d8194409f6f8642da0ea
+normal files=82 bytes=7418445 sha256=561f8331b65cdcef5563935c788ca6044d59ecba4a77674fe8cb33bc1e2cf1c3
+minified files=82 bytes=7418445 sha256=561f8331b65cdcef5563935c788ca6044d59ecba4a77674fe8cb33bc1e2cf1c3
+no-aux files=78 bytes=7408770 sha256=9d2fa6b34697c0aa87abcc32eef2962d5ad66b408945368ff36b1974bc2e3578
+no-index files=75 bytes=7363194 sha256=35e887dae71b17d102fb3eea8f05cb32cc326c0ce864f0cffa5a0d37183e9b84
+posts-root files=82 bytes=7417681 sha256=7377e75048675a1088ebef235a20653f0859898ff1469b4b7defc23474b80e85
+parallel files=82 bytes=7418445 sha256=78dff9a832a2c282753f5843946075a590899cd5a327ab420ddabd024e89b8a3
 
 # Normal-build file list
 404.html

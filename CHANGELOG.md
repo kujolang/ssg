@@ -14,6 +14,14 @@
   recursively deleting a caller-composed path.
 - Bound parallel-build shard and concurrency inputs, support `--content=<dir>`
   during auto-sizing, and handle empty post directories deterministically.
+- Apply the shard ceiling inside `build.kujo`, terminate active shard workers
+  when the parallel orchestrator is interrupted, and require an ownership
+  marker before replacing generated benchmark content.
+- Avoid a root-level fallback target in CLI-contract cleanup.
+- Refresh the frozen WebMCP-disabled fingerprints after intentional image
+  optimization changes and enforce them in the release gate.
+- Make frozen-output byte counting and SHA-256 hashing portable across macOS
+  and Linux release hosts.
 
 ## 1.1.0 - 2026-09-29
 

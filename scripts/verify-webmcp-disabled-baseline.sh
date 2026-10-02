@@ -7,15 +7,31 @@ BASELINE="$REPO_ROOT/tests/fixtures/webmcp-disabled-baseline.txt"
 TEMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEMP_ROOT"' EXIT
 
+sha256_stream() {
+	if command -v shasum >/dev/null 2>&1; then
+		shasum -a 256
+	else
+		sha256sum
+	fi
+}
+
 tree_fingerprint() {
 	local base="$1"
-	local count bytes digest
+	local count bytes digest file size
 	count="$(find "$base" -type f | wc -l | tr -d ' ')"
-	bytes="$(find "$base" -type f -exec stat -f '%z' {} + | awk '{sum += $1} END {print sum + 0}')"
+	bytes=0
+	while IFS= read -r -d '' file; do
+		if size="$(stat -f '%z' "$file" 2>/dev/null)"; then
+			:
+		else
+			size="$(stat -c '%s' "$file")"
+		fi
+		bytes=$((bytes + size))
+	done < <(find "$base" -type f -print0)
 	digest="$(find "$base" -type f | sed "s#^$base/##" | LC_ALL=C sort | while IFS= read -r relative; do
-		file_hash="$(shasum -a 256 "$base/$relative" | awk '{print $1}')"
+		file_hash="$(sha256_stream < "$base/$relative" | awk '{print $1}')"
 		printf '%s  %s\n' "$file_hash" "$relative"
-	done | shasum -a 256 | awk '{print $1}')"
+	done | sha256_stream | awk '{print $1}')"
 	printf 'files=%s bytes=%s sha256=%s' "$count" "$bytes" "$digest"
 }
 
