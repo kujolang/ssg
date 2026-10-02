@@ -22,5 +22,6 @@ llms: public
 watch: false
 minify: true
 download_remote_images: false
+allow_private_remote_images: false
 no_index: false
 no_aux: false

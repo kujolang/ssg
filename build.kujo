@@ -42,6 +42,7 @@ func print_help() {
 		"  --watch                       Reserved (not implemented)",
 		"  --minify                      Generate minified CSS/JS",
 		"  --download-remote-images      Download remote featured images",
+		"  --allow-private-remote-images Allow loopback/private remote image URLs",
 		"  --drafts                      Include draft content (preview builds)",
 		"  --webmcp                     Enable experimental static WebMCP tools (default)",
 		"  --no-webmcp                  Disable experimental static WebMCP tools",
@@ -75,6 +76,7 @@ func default_settings() {
 		"watch": false,
 		"minify": false,
 		"download_remote_images": false,
+		"allow_private_remote_images": false,
 		"drafts": false,
 		"webmcp": true,
 		"blog_slug": "blog",
@@ -2065,9 +2067,20 @@ func process_remote_featured_image(source_url, settings) {
 	download_abs := path_join(settings["output"], download_rel)
 	if !path_exists(download_abs) {
 		try {
-			image_bytes := http_get_binary(download_url)
-			write_binary_file(download_abs, image_bytes)
+			destination_policy := "deny_private"
+			if parse_bool_value(settings["allow_private_remote_images"], false) {
+				destination_policy = "default"
+			}
+			http_download_file(download_url, download_abs, {
+				"max_bytes": 26214400,
+				"timeout_ms": 30000,
+				"destination_policy": destination_policy,
+				"pin_dns": true,
+				"redirects": "none",
+				"overwrite": false
+			})
 		} except err {
+			print("Warning: Could not mirror remote featured_image '" + download_url + "': " + safe_error_text(err))
 			return source_url
 		}
 	}
@@ -2406,11 +2419,12 @@ func delete_tree(path) {
 	if !path_exists(path) {
 		return null
 	}
+	if path_is_symlink(path) {
+		delete_file(path)
+		return null
+	}
 	if path_is_file(path) {
-		try {
-			delete_file(path)
-		} except err {
-		}
+		delete_file(path)
 		return null
 	}
 
@@ -2424,19 +2438,15 @@ func delete_tree(path) {
 		entry := entries[entry_idx]
 		entry_idx := entry_idx + 1
 		child := path_join(path, entry)
-		if path_is_dir(child) {
+		if path_is_symlink(child) {
+			delete_file(child)
+		} else if path_is_dir(child) {
 			delete_tree(child)
 		} else {
-			try {
-				delete_file(child)
-			} except err {
-			}
+			delete_file(child)
 		}
 	}
-	try {
-		os_rmdir(path)
-	} except err {
-	}
+	os_rmdir(path)
 }
 
 func copy_tree(src, dst) {
@@ -2465,7 +2475,9 @@ func copy_tree(src, dst) {
 		}
 		src_path := path_join(src, entry)
 		dst_path := path_join(dst, entry)
-		if path_is_dir(src_path) {
+		if path_is_symlink(src_path) {
+			print("Warning: Skipped symlink while copying assets: " + src_path)
+		} else if path_is_dir(src_path) {
 			copy_tree(src_path, dst_path)
 		} else {
 			ensure_dir(dirname(dst_path))
@@ -2555,7 +2567,14 @@ func try_download_google_font(family, output_fonts_dir, cache_fonts_dir) {
 	fetch_ok := false
 	fetch_error := "request failed"
 	try {
-		request_result := http_request(url, {"headers": {"User-Agent": ua}})
+		request_result := http_request(url, {
+			"headers": {"User-Agent": ua},
+			"max_response_bytes": 1048576,
+			"destination_policy": "deny_private",
+			"pin_dns": true,
+			"redirects": "none",
+			"timeout": 30
+		})
 		match request_result {
 			case Ok(resp): {
 				status := resp["status"]
@@ -2645,11 +2664,17 @@ func try_download_google_font(family, output_fonts_dir, cache_fonts_dir) {
 		}
 		if !ensured {
 			try {
-				downloaded := http_get_binary(font_url)
-				write_binary_file(output_path, downloaded)
+				http_download_file(font_url, output_path, {
+					"max_bytes": 8388608,
+					"timeout_ms": 30000,
+					"destination_policy": "deny_private",
+					"pin_dns": true,
+					"redirects": "none",
+					"overwrite": false
+				})
 				ensure_dir(cache_fonts_dir)
 				try {
-					write_binary_file(cache_path, downloaded)
+					copy_file(output_path, cache_path)
 				} except cache_err {
 				}
 				ensured = true
@@ -2691,6 +2716,14 @@ func resolve_font_family(requested, default_family, settings, output_fonts_dir, 
 	print(warning)
 	default_key := to_lower(default_family)
 	return {"family": default_family, "fallback": font_generic_fallback(default_key), "lines": bundled_font_face_lines(default_family, default_key)}
+}
+
+func is_safe_font_family(value) {
+	family := trim(to_string(value))
+	if len(family) == 0 || len(family) > 80 {
+		return false
+	}
+	return len(regex_replace(family, "[A-Za-z0-9 ._-]", "")) == 0
 }
 
 func generate_fonts_css(settings) {
@@ -3266,6 +3299,7 @@ func create_sample_config(format_name) {
 		"llms": "public",
 		"minify": false,
 		"download_remote_images": false,
+		"allow_private_remote_images": false,
 		"webmcp": true,
 		"watch": false
 	}
@@ -3419,6 +3453,11 @@ func apply_cli_overrides(settings, cli_args) {
 		}
 		if token == "--download-remote-images" {
 			settings["download_remote_images"] = true
+			i := i + 1
+			continue
+		}
+		if token == "--allow-private-remote-images" {
+			settings["allow_private_remote_images"] = true
 			i := i + 1
 			continue
 		}
@@ -3593,6 +3632,7 @@ func normalize_settings(settings) {
 		{"key": "watch", "fallback": false},
 		{"key": "minify", "fallback": false},
 		{"key": "download_remote_images", "fallback": false},
+		{"key": "allow_private_remote_images", "fallback": false},
 		{"key": "drafts", "fallback": false},
 		{"key": "webmcp", "fallback": true},
 		{"key": "posts_at_root", "fallback": false},
@@ -3620,6 +3660,17 @@ func normalize_settings(settings) {
 
 	fonts := settings["fonts"]
 	settings["fonts"] = to_string_array(fonts)
+	font_index := 0
+	loop {
+		if font_index >= len(settings["fonts"]) {
+			break
+		}
+		font_family := settings["fonts"][font_index]
+		font_index := font_index + 1
+		if !is_safe_font_family(font_family) {
+			result["errors"] = push(result["errors"], "Invalid font family: " + to_string(font_family) + " (expected 1-80 ASCII letters, digits, spaces, dots, underscores, or hyphens)")
+		}
+	}
 
 	robots := to_lower(trim(to_string(settings["robots"])))
 	if len(robots) > 0 && !string_in_list(robots, ["public", "private"]) {
@@ -3683,9 +3734,12 @@ func normalize_settings(settings) {
 	# overlap with source trees, including the working directory and filesystem
 	# root, before any destructive build work begins.
 	try {
-			output_abs := absolute_config_path(settings["output"])
-			cwd_abs := path_absolute(os_getcwd())
-			if output_abs == cwd_abs || dirname(output_abs) == output_abs {
+		output_abs := absolute_config_path(settings["output"])
+		cwd_abs := path_absolute(os_getcwd())
+		if path_exists(settings["output"]) && path_is_symlink(settings["output"]) {
+			result["errors"] = push(result["errors"], "Unsafe output directory: " + settings["output"] + " is a symbolic link")
+		}
+		if output_abs == cwd_abs || dirname(output_abs) == output_abs {
 				result["errors"] = push(result["errors"], "Unsafe output directory: " + settings["output"] + " (refusing to delete the working directory or filesystem root)")
 			}
 

@@ -35,18 +35,30 @@ BUILD="./build.kujo"
 CONTENT="content"
 prev=""
 for a in "$@"; do
-    [ "$prev" = "--content" ] && CONTENT="$a"
+    if [ "$prev" = "--content" ]; then
+        CONTENT="$a"
+    elif [[ "$a" == --content=* ]]; then
+        CONTENT="${a#--content=}"
+    fi
     prev="$a"
 done
 
 CORES="$( (sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 8) )"
+if ! [[ "$CORES" =~ ^[0-9]+$ ]] || [ "$CORES" -lt 1 ]; then
+    CORES=8
+elif [ "$CORES" -gt 64 ]; then
+    CORES=64
+fi
 
 if [ "$CONCURRENCY" = "auto" ]; then
     CONCURRENCY="$CORES"
 fi
 
 if [ "$SHARDS" = "auto" ]; then
-    POSTS="$(ls "$CONTENT"/posts/*.md 2>/dev/null | wc -l | tr -d ' ')"
+    POSTS=0
+    if [ -d "$CONTENT/posts" ]; then
+        POSTS="$(find "$CONTENT/posts" -maxdepth 1 -type f -name '*.md' -print | wc -l | tr -d ' ')"
+    fi
     [ "$POSTS" -lt 1 ] && POSTS=1
     # ~120 posts/shard, but never fewer than the core count (so all cores stay busy)
     SHARDS=$(( (POSTS + 119) / 120 ))
@@ -61,6 +73,15 @@ for n in "$SHARDS" "$CONCURRENCY"; do
     fi
 done
 
+if [ "$SHARDS" -gt 256 ]; then
+    echo "shards must not exceed 256" >&2
+    exit 2
+fi
+if [ "$CONCURRENCY" -gt 64 ]; then
+    echo "concurrency must not exceed 64" >&2
+    exit 2
+fi
+
 start=$(date +%s.%N)
 
 echo "[1/3] setup"
@@ -69,6 +90,11 @@ t_setup=$(date +%s.%N)
 
 echo "[2/3] rendering posts: $SHARDS shards, $CONCURRENCY at a time"
 fail_flag="$(mktemp)"
+cleanup_fail_flag() {
+    rm -f -- "$fail_flag"
+}
+trap cleanup_fail_flag EXIT
+trap 'cleanup_fail_flag; exit 130' INT TERM
 # Bounded parallelism in fixed-size batches. This avoids `wait -n`, which is
 # unavailable on the bash 3.2 that ships with macOS (where the fallback `wait`
 # serialized every shard after the first batch). Each batch launches up to
@@ -90,10 +116,12 @@ while [ "$i" -lt "$SHARDS" ]; do
 done
 
 if [ -s "$fail_flag" ]; then
-    echo "A posts shard failed:" >&2; cat "$fail_flag" >&2; rm -f "$fail_flag"
+    echo "A posts shard failed:" >&2
+    cat "$fail_flag" >&2
     exit 1
 fi
-rm -f "$fail_flag"
+cleanup_fail_flag
+trap - EXIT INT TERM
 t_render=$(date +%s.%N)
 
 echo "[3/3] finalize"

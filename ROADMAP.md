@@ -33,7 +33,7 @@ Current validated release path:
 | Config loading (YML/YAML/JSON) | Present | Fully validated | P0 | Validated |
 | CLI override precedence | Present | Fully validated | P0 | Validated |
 | README parity docs | Present | Complete parity docs | P1 | Validated |
-| Security hardening | Partial | Contained local images, delimiter-aware frontmatter, remote-fetch policy | P0 | In progress |
+| Security hardening | Complete | Contained local images, delimiter-aware frontmatter, bounded public-only remote fetches | P0 | Validated |
 | Experimental WebMCP v1 | Default-on static adapter (experimental) | Four universal read-only tools over a versioned public index | P1 | Implemented |
 | Design rewrite (new branding system) | Pending style input | Complete visual rewrite | P1 | [ ] |
 
@@ -223,7 +223,7 @@ Acceptance criteria:
 ## Completion Checklist
 
 - [ ] All phases complete.
-- [ ] No open P0 items (SSG-002 remote-fetch destination policy remains open).
+- [x] No open P0 items.
 - [x] No regression findings.
 - [x] Build output validated.
 - [ ] Roadmap marked complete with final date and commit hash.
@@ -239,3 +239,4 @@ Acceptance criteria:
 - 2026-05-28: Switched post sorting to a stable implementation and added generated-output coverage for pagination boundaries plus deterministic `date`, `title`, `author`, and `order` sorting, including tie and missing-order behavior.
 - 2026-05-28: Rewrote the README into a forward-facing production guide, removed stale interpreter-era wording, and aligned the docs status with the now-closed P0 parity items.
 - 2026-07-10: Reconciled historic parity status with current contract coverage. Local featured-image containment and delimiter-aware frontmatter are validated; remote-fetch destination policy remains the open P0 security item.
+- 2026-10-02: Closed SSG-002 with bounded, DNS-pinned, redirect-free remote fetches that deny non-public destinations by default, plus explicit trusted-local image opt-in coverage.

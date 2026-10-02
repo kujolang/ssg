@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Deny non-public remote image and Google Font destinations by default, pin DNS,
+  refuse redirects, and cap response sizes; private image mirroring now requires
+  an explicit trusted-local opt-in.
+- Reject unsafe font-family input before it reaches generated CSS or a remote
+  request.
+- Refuse symlink output roots, remove nested output symlinks without following
+  them, and skip asset symlinks during publication.
+- Build docs-template archives in private staging directories instead of
+  recursively deleting a caller-composed path.
+- Bound parallel-build shard and concurrency inputs, support `--content=<dir>`
+  during auto-sizing, and handle empty post directories deterministically.
+
 ## 1.1.0 - 2026-09-29
 
 ### Added

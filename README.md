@@ -315,6 +315,7 @@ watch: false
 minify: false
 webmcp: true
 download_remote_images: false
+allow_private_remote_images: false
 no_index: false
 no_aux: false
 ```
@@ -349,6 +350,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--watch`: reserved, currently not implemented
 - `--minify`: emit minified CSS/JS assets
 - `--download-remote-images`: mirror remote `featured_image` URLs into output (needs outbound network — see [Runtime Capabilities](#runtime-capabilities))
+- `--allow-private-remote-images`: explicitly permit loopback/private remote image sources; ignored unless remote-image mirroring is enabled
 - `--drafts`: include `draft: true` content in the build (preview/staging workflow); omitted by default
 - `--webmcp`: enable the experimental static WebMCP v1 index and browser tools (the default)
 - `--no-webmcp`: disable WebMCP generation for a build
@@ -537,6 +539,10 @@ For most teams, the fastest path to a working site is:
   SSG safely falls back to the original extension instead of publishing a
   larger lossless WebP.
 - Remote images are only downloaded when `download_remote_images: true` or `--download-remote-images` is enabled
+- Mirroring denies loopback, private, link-local, multicast, and otherwise
+  non-public destinations by default, pins DNS for the request, refuses redirects,
+  and caps each image at 25 MiB. Use `allow_private_remote_images: true` or
+  `--allow-private-remote-images` only for a deliberately trusted local source.
 
 For deterministic CI and release builds, install `cwebp` and leave remote
 downloads disabled unless the build explicitly needs mirrored remote assets.
@@ -565,6 +571,11 @@ Google Font downloads need outbound network access. The default
 granted), so downloads work with no extra flags. Only if you run the build in
 hardened `--untrusted` mode do you need to opt in — see
 [Runtime Capabilities](#runtime-capabilities).
+
+Font metadata responses are capped at 1 MiB and font files at 8 MiB. Both
+requests deny non-public destinations, pin DNS, and refuse redirects. Font
+family names are limited to the safe ASCII characters accepted by the generated
+CSS and Google Fonts request path.
 
 If a requested Google Font cannot be provisioned (no network, missing capability
 in `--untrusted` mode, or an unknown family name), the build prints a warning and

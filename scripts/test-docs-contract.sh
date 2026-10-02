@@ -12,10 +12,10 @@ assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Plain sit
 assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Delimiter-aware frontmatter | Supported |'
 assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| DocGen-to-SSG Markdown bridge | Supported |'
 assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Reusable docs-site starter package | Supported |'
-assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Remote featured-image/font destination policy | Planned (P0) |'
+assert_file_contains "$REPO_ROOT/docs/current-capability-matrix.md" '| Remote featured-image/font destination policy | Supported |'
 assert_file_contains "$REPO_ROOT/README.md" 'scripts/docgen_ssg_bridge.kujo'
 assert_file_contains "$REPO_ROOT/README.md" 'scripts/update_docs.kujo'
 assert_file_contains "$REPO_ROOT/README.md" 'scripts/package-docs-template.sh'
-assert_file_contains "$REPO_ROOT/ROADMAP.md" 'SSG-002 remote-fetch destination policy remains open'
+assert_file_contains "$REPO_ROOT/ROADMAP.md" 'Closed SSG-002'
 
 echo "Documentation contract passed"

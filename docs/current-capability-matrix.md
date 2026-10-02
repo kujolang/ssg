@@ -17,7 +17,7 @@ has been superseded.
 | Taxonomy lookup/rendering | Supported | `scripts/test-generated-contract.sh` asserts rendered custom taxonomy labels |
 | DocGen-to-SSG Markdown bridge | Supported | `scripts/test-docgen-ssg-bridge.sh` covers deterministic Markdown conversion, frontmatter, gates, stale cleanup, and path containment |
 | Reusable docs-site starter package | Supported | `scripts/test-docs-template.sh` packages `starters/docs-site`, builds it, generates local search, runs the update automation against a fixture repo, and validates output |
-| Remote featured-image/font destination policy | Planned (P0) | No policy contract yet; this is SSG-002 and remains outside the trusted-build default |
+| Remote featured-image/font destination policy | Supported | Remote fetches are size-bounded, DNS-pinned, redirect-free, and deny non-public destinations by default; `scripts/test-cli-contract.sh` covers denial plus explicit trusted-local image opt-in |
 | `--watch` rebuild loop | Planned (P1) | Current CLI contract verifies the documented no-op warning |
 
 Run the supported checks with:

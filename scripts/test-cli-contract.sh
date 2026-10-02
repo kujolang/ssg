@@ -20,7 +20,7 @@ stop_remote_server() {
 cleanup_temp_site_state() {
 	stop_remote_server
 	rm -f kujo-ssg.yml kujo-ssg.yaml kujo-ssg.json
-	rm -rf output output-yml output-yaml output-json output-yml-preferred output-yaml-preferred output-json-fallback output-cli output-cli-fields output-private output-suppressed output-no-drafts output-with-drafts content-cli templates-cli assets-cli remote-assets
+	rm -rf output output-yml output-yaml output-json output-yml-preferred output-yaml-preferred output-json-fallback output-cli output-cli-fields output-cli-fields-blocked output-private output-suppressed output-no-drafts output-with-drafts content-cli templates-cli assets-cli remote-assets
 	rm -rf "${ABS_OUTPUT_DIR:-/nonexistent-abs-output-guard}"
 }
 
@@ -253,6 +253,9 @@ main() {
 	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --robots weird
 	assert_output_contains "Error: Invalid value for robots: weird"
 
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --fonts "Inter');body{display:none}/*,Inter"
+	assert_output_contains "Error: Invalid font family: Inter');body{display:none}/*"
+
 	cat > kujo-ssg.yml <<'EOF'
 site_url: https://demo.kujo.local
 site_title: Kujo SSG Starter Site
@@ -408,7 +411,15 @@ description: Proof that the CLI remote-image flag overrides the config value.
 
 This post proves remote-image downloading through CLI overrides.
 EOF
-	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output output-cli-fields --content content-cli --templates templates-cli --assets assets-cli --site-title "CLI Override Title" --site-tagline "CLI override tagline wins." --site-url https://cli-fields.example.test --watch --minify --download-remote-images
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output output-cli-fields-blocked --content content-cli --templates templates-cli --assets assets-cli --site-url https://cli-fields.example.test --no-index --no-aux --no-aliases --download-remote-images
+	assert_output_contains "blocked by explicit outbound destination policy 'deny_private'"
+	assert_file_contains output-cli-fields-blocked/remote-image-proof/index.html "$remote_image_url"
+	if compgen -G 'output-cli-fields-blocked/images/cli-remote-proof-*' >/dev/null; then
+		echo "Private remote image was mirrored without explicit opt-in"
+		exit 1
+	fi
+
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output output-cli-fields --content content-cli --templates templates-cli --assets assets-cli --site-title "CLI Override Title" --site-tagline "CLI override tagline wins." --site-url https://cli-fields.example.test --watch --minify --download-remote-images --allow-private-remote-images
 	assert_output_contains "Warning: --watch is currently not implemented."
 	assert_output_contains "Build complete"
 	assert_path_missing output-config

@@ -12,6 +12,10 @@ main() {
 	trap "rm -rf '$temp_dir'" EXIT
 
 	local package_out="$temp_dir/dist"
+	touch "$temp_dir/preserve-me"
+	run_expect_failure "$REPO_ROOT/scripts/package-docs-template.sh" "$package_out" "../preserve-me"
+	assert_output_contains "ERROR: package name must be a safe single path segment"
+	assert_path_exists "$temp_dir/preserve-me"
 	run_expect_success "$REPO_ROOT/scripts/package-docs-template.sh" "$package_out"
 	assert_output_contains "Docs template package:"
 	assert_path_exists "$package_out/kujo-ssg-docs-template.tar.gz"
