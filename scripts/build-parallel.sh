@@ -90,11 +90,26 @@ t_setup=$(date +%s.%N)
 
 echo "[2/3] rendering posts: $SHARDS shards, $CONCURRENCY at a time"
 fail_flag="$(mktemp)"
+active_pids=""
 cleanup_fail_flag() {
     rm -f -- "$fail_flag"
 }
+cleanup_workers() {
+    local worker pid
+    for worker in $active_pids; do
+        pid="${worker%%:*}"
+        kill "$pid" 2>/dev/null || true
+    done
+    wait 2>/dev/null || true
+    active_pids=""
+}
+handle_signal() {
+    cleanup_workers
+    cleanup_fail_flag
+    exit 130
+}
 trap cleanup_fail_flag EXIT
-trap 'cleanup_fail_flag; exit 130' INT TERM
+trap handle_signal INT TERM
 # Bounded parallelism in fixed-size batches. This avoids `wait -n`, which is
 # unavailable on the bash 3.2 that ships with macOS (where the fallback `wait`
 # serialized every shard after the first batch). Each batch launches up to
@@ -104,14 +119,20 @@ while [ "$i" -lt "$SHARDS" ]; do
     batch_end=$((i + CONCURRENCY))
     [ "$batch_end" -gt "$SHARDS" ] && batch_end="$SHARDS"
     j="$i"
+    active_pids=""
     while [ "$j" -lt "$batch_end" ]; do
-        (
-            "$KUJO" run "$BUILD" -- --phase posts --shard "$j" --shards "$SHARDS" "$@" \
-                || echo "shard $j failed" >>"$fail_flag"
-        ) &
+        "$KUJO" run "$BUILD" -- --phase posts --shard "$j" --shards "$SHARDS" "$@" &
+        active_pids="$active_pids $!:$j"
         j=$((j + 1))
     done
-    wait
+    for worker in $active_pids; do
+        pid="${worker%%:*}"
+        shard="${worker##*:}"
+        if ! wait "$pid"; then
+            echo "shard $shard failed" >>"$fail_flag"
+        fi
+    done
+    active_pids=""
     i="$batch_end"
 done
 

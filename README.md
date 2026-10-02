@@ -364,7 +364,9 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--help`
 
 Unknown flags, missing option values, malformed YAML/JSON config, invalid booleans, and invalid enum values fail fast with a nonzero exit.
-Internal parallel-build shard values are also validated (`0 <= shard < shards`).
+Internal parallel-build shard values are also validated
+(`0 <= shard < shards <= 256`). The benchmark-content generator only replaces
+directories bearing its `.kujo-ssg-benchmark-content` ownership marker.
 
 ## Content Model
 

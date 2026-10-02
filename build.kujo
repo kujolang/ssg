@@ -3720,6 +3720,9 @@ func normalize_settings(settings) {
 		result["errors"] = push(result["errors"], "Invalid value for shards: " + to_string(raw_shards) + " (expected positive integer)")
 		settings["shards"] = 1
 	}
+	if settings["shards"] > 256 {
+		result["errors"] = push(result["errors"], "Invalid value for shards: " + to_string(raw_shards) + " (must not exceed 256)")
+	}
 	raw_shard := settings["shard"]
 	settings["shard"] = parse_int_value(raw_shard, 0)
 	if !is_integer_text(raw_shard) || settings["shard"] < 0 {

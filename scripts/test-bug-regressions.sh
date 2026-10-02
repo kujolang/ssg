@@ -134,6 +134,8 @@ EOF
 	# 2: out-of-range shard indexes must not silently render an empty stripe.
 	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --phase posts --shard 2 --shards 2
 	assert_output_contains "Invalid shard index: 2 (must be less than shards=2)"
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --phase posts --shard 0 --shards 257
+	assert_output_contains "Invalid value for shards: 257 (must not exceed 256)"
 
 	mkdir -p output
 	ln -s "$temp_dir/outside-output" output/outside-link
@@ -188,6 +190,70 @@ EOF
 	assert_output_contains "shards must not exceed 256"
 	run_expect_failure env KUJO_BIN="$true_bin" bash "$REPO_ROOT/scripts/build-parallel.sh" 1 65
 	assert_output_contains "concurrency must not exceed 64"
+
+	# 13: interrupting the orchestrator terminates active shard workers.
+	local fake_kujo="$temp_dir/fake-kujo"
+	local fake_pid_file="$temp_dir/fake-worker-pids"
+	cat > "$fake_kujo" <<'EOF'
+#!/usr/bin/env bash
+phase=""
+previous=""
+for argument in "$@"; do
+	if [[ "$previous" == "--phase" ]]; then
+		phase="$argument"
+	fi
+	previous="$argument"
+done
+if [[ "$phase" == "posts" ]]; then
+	printf '%s\n' "$$" >> "$FAKE_PID_FILE"
+	exec sleep 30
+fi
+exit 0
+EOF
+	chmod +x "$fake_kujo"
+	FAKE_PID_FILE="$fake_pid_file" KUJO_BIN="$fake_kujo" bash "$REPO_ROOT/scripts/build-parallel.sh" 2 2 >"$temp_dir/interrupted-build.log" 2>&1 &
+	local orchestrator_pid=$!
+	local attempt
+	for attempt in {1..50}; do
+		if [[ -f "$fake_pid_file" ]] && [[ "$(wc -l < "$fake_pid_file" | tr -d ' ')" -ge 2 ]]; then
+			break
+		fi
+		sleep 0.1
+	done
+	if [[ ! -f "$fake_pid_file" ]] || [[ "$(wc -l < "$fake_pid_file" | tr -d ' ')" -lt 2 ]]; then
+		kill "$orchestrator_pid" 2>/dev/null || true
+		wait "$orchestrator_pid" 2>/dev/null || true
+		echo "FAIL parallel interruption fixture did not launch both workers"
+		exit 1
+	fi
+	kill -TERM "$orchestrator_pid"
+	local interrupt_status=0
+	wait "$orchestrator_pid" || interrupt_status=$?
+	if [[ "$interrupt_status" -ne 130 ]]; then
+		echo "FAIL interrupted parallel build exited $interrupt_status instead of 130"
+		exit 1
+	fi
+	local worker_pid
+	while IFS= read -r worker_pid; do
+		if kill -0 "$worker_pid" 2>/dev/null; then
+			kill "$worker_pid" 2>/dev/null || true
+			echo "FAIL interrupted parallel build left worker $worker_pid running"
+			exit 1
+		fi
+	done < "$fake_pid_file"
+
+	# 14: benchmark fixture regeneration only replaces directories previously
+	# created and marked by the generator.
+	mkdir -p "$temp_dir/unowned-benchmark"
+	touch "$temp_dir/unowned-benchmark/preserve-me"
+	run_expect_failure python3 "$REPO_ROOT/scripts/generate-benchmark-content.py" 2 "$temp_dir/unowned-benchmark"
+	assert_output_contains "refusing to replace unowned benchmark directory"
+	assert_path_exists "$temp_dir/unowned-benchmark/preserve-me"
+	run_expect_success python3 "$REPO_ROOT/scripts/generate-benchmark-content.py" 2 "$temp_dir/owned-benchmark"
+	assert_path_exists "$temp_dir/owned-benchmark/.kujo-ssg-benchmark-content"
+	assert_path_exists "$temp_dir/owned-benchmark/posts/post-00002.md"
+	run_expect_success python3 "$REPO_ROOT/scripts/generate-benchmark-content.py" 1 "$temp_dir/owned-benchmark"
+	assert_path_missing "$temp_dir/owned-benchmark/posts/post-00002.md"
 
 	popd >/dev/null
 	echo "Bug regression tests passed"

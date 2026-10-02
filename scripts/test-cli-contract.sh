@@ -21,7 +21,9 @@ cleanup_temp_site_state() {
 	stop_remote_server
 	rm -f kujo-ssg.yml kujo-ssg.yaml kujo-ssg.json
 	rm -rf output output-yml output-yaml output-json output-yml-preferred output-yaml-preferred output-json-fallback output-cli output-cli-fields output-cli-fields-blocked output-private output-suppressed output-no-drafts output-with-drafts content-cli templates-cli assets-cli remote-assets
-	rm -rf "${ABS_OUTPUT_DIR:-/nonexistent-abs-output-guard}"
+	if [[ -n "${ABS_OUTPUT_DIR:-}" ]]; then
+		rm -rf -- "$ABS_OUTPUT_DIR"
+	fi
 }
 
 write_yaml_config() {
