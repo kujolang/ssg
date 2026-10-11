@@ -1,5 +1,7 @@
 # Repository hardening audit
 
+Latest pass: [round 5 — publication boundaries, bounded inspection and failure semantics](repository-hardening-round-5.md).
+
 ## Repository
 
 - Repository: `kujolang/ssg`

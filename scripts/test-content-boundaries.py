@@ -67,7 +67,7 @@ class Publication(unittest.TestCase):
         (cls.content / "posts" / "external.md").symlink_to(external / "private.md")
         (external / "authors.yml").write_text("1: EXTERNAL-AUTHOR-SENTINEL\n")
         (cls.content / "authors.yml").symlink_to(external / "authors.yml")
-        cls.title = "</script><script>metadataAttack()</script>"
+        cls.title = "Café 日本語 </script><script>metadataAttack()</script>"
         cls.description = "Control\x01 text <tag>"
         (cls.content / "posts" / "safe.md").write_text(
             "---\ntitle: "
