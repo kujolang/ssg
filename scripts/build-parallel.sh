@@ -35,6 +35,12 @@ BUILD="./build.kujo"
 CONTENT="content"
 prev=""
 for a in "$@"; do
+    case "$a" in
+        --phase|--phase=*|--shard|--shard=*|--shards|--shards=*)
+            echo "phase, shard, and shards are managed by the parallel orchestrator" >&2
+            exit 2
+            ;;
+    esac
     if [ "$prev" = "--content" ]; then
         CONTENT="$a"
     elif [[ "$a" == --content=* ]]; then
@@ -134,6 +140,11 @@ while [ "$i" -lt "$SHARDS" ]; do
     done
     active_pids=""
     i="$batch_end"
+    # A failed batch cannot produce a complete site. Reap its workers, then
+    # stop before starting more shards; preserve every failure diagnostic.
+    if [ -s "$fail_flag" ]; then
+        break
+    fi
 done
 
 if [ -s "$fail_flag" ]; then

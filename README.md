@@ -131,7 +131,9 @@ bash scripts/build-parallel.sh auto auto \
 ```
 
 Use many small shards (~120–300 posts each) and a concurrency near your core
-count. Internally this drives `build.kujo`'s `--phase setup|posts|finalize` and
+count. The wrapper owns `--phase`, `--shard`, and `--shards`; do not supply those
+flags in build arguments. A failed worker batch stops subsequent batches and
+prevents finalization. Internally this drives `build.kujo`'s `--phase setup|posts|finalize` and
 `--shard i --shards N` flags; the default `kujo run ./build.kujo` remains a normal
 single-process build. (The per-page render cost is interpreter-bound, so the
 speedup is real but memory-bandwidth-limited — see
@@ -220,7 +222,10 @@ Gate controls:
 
 The bridge only deletes files listed in
 `<content-out>/.docgen-ssg-manifest.json`, and it refuses content, DocGen output,
-or cache paths that escape the SSG root.
+or cache paths that escape the SSG root. Both rendering backends reject symlinked
+generated files and manifest descendants before modifying content. `--dry-run`
+requires an existing `--docgen-payload` and never starts DocGen, builds the site,
+or runs validation; it checks and renders the supplied artifacts in memory.
 
 ## Reusable Docs Template
 
@@ -412,6 +417,11 @@ Frontmatter keys supported across pages, posts, and custom types:
 - `tags`
 - `categories`
 - `taxonomies`
+
+Content discovery skips symbolic links, including collection roots and lookup
+files. Both docs search generators also skip linked files and directories.
+Metadata stays text in JSON-LD and docs search results; docs previous/next links
+accept relative routes and HTTP(S) URLs.
 
 Frontmatter opens and closes only with a line containing `---`. Literal `---`
 text in a quoted value or Markdown body is preserved. An unclosed or malformed

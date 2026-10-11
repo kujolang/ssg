@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import posixpath
 import re
 import sys
@@ -12,6 +13,7 @@ import tarfile
 from pathlib import Path
 
 MAX_FILES = 10_000
+MAX_ENTRIES = 20_000
 MAX_DETAILS = 200
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
 MAX_OUTPUT_FILE_BYTES = 64 * 1024 * 1024
@@ -25,32 +27,53 @@ def fail(code: str, message: str, details: list[str] | None = None) -> None:
     raise SystemExit(1)
 
 
-def safe_dir(root: Path, raw: str, *, must_exist: bool = True) -> Path:
+def safe_path(root: Path, raw: str, *, invalid_code: str = "invalid_relative_path", symlink_code: str = "symlink_not_allowed") -> Path:
     if not raw or len(raw) > 1024 or raw.startswith(("/", "\\")) or "\\" in raw or ":" in raw or any(part in ("", ".", "..") for part in raw.split("/")):
-        fail("invalid_relative_path", "Path must be a contained relative path")
-    lexical = root / raw
-    if lexical.is_symlink():
-        fail("symlink_not_allowed", "SSG Ability paths must not be symbolic links")
-    candidate = lexical.resolve(strict=must_exist)
+        fail(invalid_code, "Path must be a contained relative path")
+    candidate = root
+    for part in raw.split("/"):
+        candidate = candidate / part
+        if candidate.is_symlink():
+            fail(symlink_code, "SSG Ability paths must not be symbolic links")
     try:
-        candidate.relative_to(root)
+        candidate.resolve(strict=False).relative_to(root)
     except ValueError:
         fail("path_escape", "Path must remain inside the SSG repository")
-    if must_exist and (not candidate.is_dir() or candidate.is_symlink()):
+    return candidate
+
+
+def safe_dir(root: Path, raw: str) -> Path:
+    candidate = safe_path(root, raw)
+    if not candidate.is_dir():
         fail("invalid_directory", "Path must name a contained regular directory")
     return candidate
 
 
 def files_under(directory: Path, suffixes: tuple[str, ...] | None = None) -> list[Path]:
     files: list[Path] = []
-    for path in sorted(directory.rglob("*")):
-        if path.is_symlink():
-            fail("symlink_not_allowed", "SSG Ability inputs must not contain symbolic links", [str(path.relative_to(directory))])
-        if path.is_file() and (suffixes is None or path.suffix.lower() in suffixes):
-            files.append(path)
-            if len(files) > MAX_FILES:
-                fail("file_limit_exceeded", "SSG Ability scan exceeded its file limit")
-    return files
+    pending = [directory]
+    entries_seen = 0
+    files_seen = 0
+    while pending:
+        with os.scandir(pending.pop()) as entries:
+            for entry in entries:
+                entries_seen += 1
+                if entries_seen > MAX_ENTRIES:
+                    fail("entry_limit_exceeded", "SSG Ability scan exceeded its directory-entry limit")
+                path = Path(entry.path)
+                if entry.is_symlink():
+                    fail("symlink_not_allowed", "SSG Ability inputs must not contain symbolic links", [str(path.relative_to(directory))])
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+                elif entry.is_file(follow_symlinks=False):
+                    files_seen += 1
+                    if files_seen > MAX_FILES:
+                        fail("file_limit_exceeded", "SSG Ability scan exceeded its file limit")
+                    if suffixes is None or path.suffix.lower() in suffixes:
+                        files.append(path)
+                else:
+                    fail("invalid_file_type", "SSG Ability inputs must contain only regular files and directories", [str(path.relative_to(directory))])
+    return sorted(files)
 
 
 def hash_file(path: Path) -> str:
@@ -92,7 +115,7 @@ def source_validate(root: Path) -> dict:
     return {"operation": "source_validate", "scanned": scanned, "error_count": 0, "details": []}
 
 
-def output_manifest(root: Path, raw: str) -> tuple[Path, list[dict]]:
+def output_manifest(root: Path, raw: str, *, include_hashes: bool = True) -> tuple[Path, list[dict]]:
     output = safe_dir(root, raw)
     records = []
     total_bytes = 0
@@ -104,16 +127,20 @@ def output_manifest(root: Path, raw: str) -> tuple[Path, list[dict]]:
         total_bytes += size
         if total_bytes > MAX_OUTPUT_TOTAL_BYTES:
             fail("total_size_limit_exceeded", f"Generated output exceeds {MAX_OUTPUT_TOTAL_BYTES} bytes", [relative])
-        records.append({"path": relative, "bytes": size, "sha256": hash_file(path)})
+        record = {"path": relative, "bytes": size}
+        if include_hashes:
+            record["sha256"] = hash_file(path)
+        records.append(record)
     return output, records
 
 
 def output_inspect(root: Path, raw: str) -> dict:
-    output, records = output_manifest(root, raw)
+    output, records = output_manifest(root, raw, include_hashes=False)
     paths = {record["path"] for record in records}
     html_paths = sorted(path for path in paths if path.endswith(".html"))
     routes = []
     broken = []
+    broken_count = 0
     metadata_errors = []
     for relative in html_paths:
         route = "/" if relative == "index.html" else "/" + relative.removesuffix("index.html")
@@ -121,7 +148,8 @@ def output_inspect(root: Path, raw: str) -> dict:
         text = (output / relative).read_text(encoding="utf-8", errors="replace")
         if (relative == "index.html" or relative == "404.html" or relative.endswith("/index.html")) and "<title>" not in text.lower():
             metadata_errors.append(f"{relative}: missing title")
-        for link in LINK_RE.findall(text):
+        for match in LINK_RE.finditer(text):
+            link = match.group(1)
             if link.startswith(("http://", "https://", "//", "mailto:", "tel:", "data:")):
                 continue
             directory_link = link.endswith("/")
@@ -131,12 +159,12 @@ def output_inspect(root: Path, raw: str) -> dict:
             elif directory_link:
                 target = target.rstrip("/") + "/index.html"
             if target not in paths:
-                broken.append(f"{relative} -> {link}")
-            if len(broken) >= MAX_DETAILS:
-                break
+                broken_count += 1
+                if len(broken) < MAX_DETAILS:
+                    broken.append(f"{relative} -> {link}")
     aux = {name: name in paths for name in ("sitemap.xml", "feed/index.xml", "robots.txt", "llms.txt")}
-    details = ([f"route:{route}" for route in routes] + [f"broken:{item}" for item in broken] + [f"metadata:{item}" for item in metadata_errors])[:MAX_DETAILS]
-    return {"operation": "output_inspect", "file_count": len(records), "route_count": len(routes), "broken_link_count": len(broken), "metadata_error_count": len(metadata_errors), "aux": aux, "details": details}
+    details = ([f"broken:{item}" for item in broken] + [f"metadata:{item}" for item in metadata_errors] + [f"route:{route}" for route in routes])[:MAX_DETAILS]
+    return {"operation": "output_inspect", "file_count": len(records), "route_count": len(routes), "broken_link_count": broken_count, "metadata_error_count": len(metadata_errors), "aux": aux, "details": details}
 
 
 def output_compare(root: Path, left_raw: str, right_raw: str) -> dict:
@@ -157,20 +185,10 @@ def readiness(root: Path, raw: str) -> dict:
 
 
 def export_artifact(root: Path, output_raw: str, artifact_raw: str) -> dict:
-    output, records = output_manifest(root, output_raw)
+    output, records = output_manifest(root, output_raw, include_hashes=False)
     if not artifact_raw.endswith(".tar"):
         fail("invalid_artifact_path", "Artifact path must end in .tar")
-    if not artifact_raw or len(artifact_raw) > 1024 or artifact_raw.startswith(("/", "\\")) or "\\" in artifact_raw or ":" in artifact_raw or any(part in ("", ".", "..") for part in artifact_raw.split("/")):
-        fail("invalid_artifact_path", "Artifact path must be a contained relative path")
-    lexical_artifact = root / artifact_raw
-    if lexical_artifact.is_symlink():
-        fail("invalid_artifact_path", "Artifact destination must not be a symbolic link")
-    artifact = lexical_artifact.resolve(strict=False)
-    artifact.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        artifact.relative_to(root)
-    except ValueError:
-        fail("path_escape", "Artifact path must remain inside the SSG repository")
+    artifact = safe_path(root, artifact_raw, invalid_code="invalid_artifact_path", symlink_code="invalid_artifact_path")
     try:
         artifact.relative_to(output)
         fail("invalid_artifact_path", "Artifact destination must be outside the exported output tree")
@@ -178,15 +196,23 @@ def export_artifact(root: Path, output_raw: str, artifact_raw: str) -> dict:
         pass
     if artifact.exists():
         fail("artifact_exists", "Artifact destination must not already exist")
-    with tarfile.open(artifact, "x", format=tarfile.PAX_FORMAT) as archive:
-        for record in records:
-            path = output / record["path"]
-            info = archive.gettarinfo(str(path), arcname=record["path"])
-            info.mtime = 0
-            info.uid = info.gid = 0
-            info.uname = info.gname = ""
-            with path.open("rb") as handle:
-                archive.addfile(info, handle)
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    # Opening exclusively keeps pre-existing files and hardlinks untouched.
+    # Remove only the archive we created if a source/read/write fails midway.
+    with artifact.open("xb") as destination:
+        try:
+            with tarfile.open(fileobj=destination, mode="w", format=tarfile.PAX_FORMAT) as archive:
+                for record in records:
+                    path = output / record["path"]
+                    info = archive.gettarinfo(str(path), arcname=record["path"])
+                    info.mtime = 0
+                    info.uid = info.gid = 0
+                    info.uname = info.gname = ""
+                    with path.open("rb") as handle:
+                        archive.addfile(info, handle)
+        except (OSError, tarfile.TarError):
+            artifact.unlink()
+            raise
     artifact_size = artifact.stat().st_size
     return {"operation": "artifact_export", "artifact": artifact.relative_to(root).as_posix(), "file_count": len(records), "bytes": artifact_size, "sha256": hash_file(artifact), "details": []}
 
@@ -214,4 +240,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (OSError, UnicodeError) as error:
+        fail("filesystem_error", "SSG Ability filesystem operation failed", [type(error).__name__])
