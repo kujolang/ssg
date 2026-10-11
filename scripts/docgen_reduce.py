@@ -195,6 +195,19 @@ def count_table(summary: dict) -> str:
     )
 
 
+def generated_path(content_root: Path, entry: str) -> Path:
+    if not isinstance(entry, str) or not entry or "\\" in entry or ":" in entry or any(part in ("", ".", "..") for part in entry.split("/")):
+        raise SystemExit(f"manifest entry escapes generated root: {entry}")
+    target = content_root
+    for part in entry.split("/"):
+        target = target / part
+        if target.is_symlink():
+            raise SystemExit(f"generated path must not be a symbolic link: {entry}")
+    if not target.resolve().is_relative_to(content_root.resolve()):
+        raise SystemExit(f"manifest entry escapes generated root: {entry}")
+    return target
+
+
 def write_markdown(file_path: Path, content: str, dry_run: bool) -> None:
     if dry_run:
         return
@@ -205,17 +218,17 @@ def write_markdown(file_path: Path, content: str, dry_run: bool) -> None:
 
 
 def remove_stale(content_root: Path, manifest_name: str, new_files: list[str], dry_run: bool) -> None:
-    manifest_path = content_root / manifest_name
+    manifest_path = generated_path(content_root, manifest_name)
     if not manifest_path.exists():
         return
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    for entry in manifest.get("files", []):
-        if ".." in entry or Path(entry).is_absolute():
-            raise SystemExit(f"manifest entry escapes generated root: {entry}")
-        if entry not in new_files:
-            target = content_root / entry
-            if target.exists() and not dry_run:
-                target.unlink()
+    if manifest.get("schema_version") != "docgen-ssg-manifest/v1" or not isinstance(manifest.get("files", []), list):
+        raise SystemExit("invalid DocGen SSG manifest")
+    # Validate the whole previous manifest before deleting any file.
+    targets = [(entry, generated_path(content_root, entry)) for entry in manifest.get("files", [])]
+    for entry, target in targets:
+        if entry not in new_files and target.exists() and not dry_run:
+            target.unlink()
 
 
 def render_bridge(argv: list[str]) -> int:
@@ -334,9 +347,11 @@ def render_bridge(argv: list[str]) -> int:
     pages[f"{gaps_slug}.md"] = gap_body
 
     files = sorted(pages)
+    manifest_path = generated_path(content_root, manifest_name)
+    targets = {filename: generated_path(content_root, filename) for filename in files}
     remove_stale(content_root, manifest_name, files, dry_run)
     for filename in files:
-        write_markdown(content_root / filename, pages[filename], dry_run)
+        write_markdown(targets[filename], pages[filename], dry_run)
 
     manifest = {
         "schema_version": manifest_schema,
@@ -354,7 +369,7 @@ def render_bridge(argv: list[str]) -> int:
     }
     if not dry_run:
         content_root.mkdir(parents=True, exist_ok=True)
-        (content_root / manifest_name).write_text(
+        manifest_path.write_text(
             json.dumps(manifest, indent=2, ensure_ascii=True) + "\n",
             encoding="utf-8",
         )

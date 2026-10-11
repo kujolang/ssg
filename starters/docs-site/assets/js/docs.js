@@ -17,10 +17,27 @@
 			panel.classList.add('is-open');
 			return;
 		}
-		panel.innerHTML = items.slice(0, 8).map(function(item) {
-			var description = item.description || item.section || item.route || '';
-			return '<a href="' + item.url + '"><strong>' + item.title + '</strong><span>' + description + '</span></a>';
-		}).join('');
+		panel.textContent = '';
+		items.slice(0, 8).forEach(function(item) {
+			var url;
+			try {
+				url = new URL(item.url, location.href);
+			} catch (error) {
+				return;
+			}
+			if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+				return;
+			}
+			var link = document.createElement('a');
+			var title = document.createElement('strong');
+			var description = document.createElement('span');
+			link.href = url.href;
+			title.textContent = item.title;
+			description.textContent = item.description || item.section || item.route || '';
+			link.appendChild(title);
+			link.appendChild(description);
+			panel.appendChild(link);
+		});
 		panel.classList.add('is-open');
 	};
 

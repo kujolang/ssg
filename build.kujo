@@ -373,6 +373,10 @@ func template_override_name(value, source_file) {
 
 func markdown_files(directory) {
 	files := []
+	if path_exists(directory) && path_is_symlink(directory) {
+		print("Warning: Skipped symlink while scanning content: " + directory)
+		return files
+	}
 	if !path_exists(directory) || !path_is_dir(directory) {
 		return files
 	}
@@ -896,6 +900,12 @@ func docs_link_button(label, href, rel_name) {
 	if len(clean_href) == 0 {
 		return ""
 	}
+	# Relative routes, fragments and HTTP(S) links are supported. Reject active
+	# schemes, including control-character obfuscation interpreted by browsers.
+	url_key := to_lower(regex_replace(clean_href, "[\\x00-\\x20]", ""))
+	if regex_match(url_key, "^[a-z][a-z0-9+.-]*:") && !starts_with(url_key, "https://") && !starts_with(url_key, "http://") {
+		return ""
+	}
 	return "<a class=\"docs-pagination-link docs-pagination-" + html_escape(rel_name) + "\" href=\"" + xml_escape(clean_href) + "\" rel=\"" + html_escape(rel_name) + "\"><span>" + html_escape(label) + "</span></a>"
 }
 
@@ -1208,6 +1218,10 @@ func write_public_site_index(settings, pages_data, custom_collections, record_pa
 
 func load_lookup(path) {
 	lookup := {}
+	if path_exists(path) && path_is_symlink(path) {
+		print("Warning: Skipped symlink while reading lookup: " + path)
+		return lookup
+	}
 	if !path_exists(path) {
 		return lookup
 	}
@@ -2172,13 +2186,10 @@ func absolute_media_url(path_value, site_url) {
 }
 
 func json_escape(value) {
-	s := to_string(value)
-	s = replace(s, "\\", "\\\\")
-	s = replace(s, "\"", "\\\"")
-	s = replace(s, "\n", "\\n")
-	s = replace(s, "\r", "\\r")
-	s = replace(s, "\t", "\\t")
-	return s
+	# JSON string serialization plus the HTML script-data boundary. Escaping '<'
+	# prevents both closing-script and legacy HTML-comment parser transitions.
+	encoded := to_json(to_string(value))
+	return replace(substring(encoded, 1, len(encoded) - 1), "<", "\\u003c")
 }
 
 func webmcp_runtime_source() {
@@ -2233,7 +2244,16 @@ func featured_image_html_tag(featured_image_url, title) {
 func render_layout(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta) {
 	# Delegates to the native renderer (compiled once, byte-identical to the
 	# previous interpreted body, which is preserved as render_layout_interpreted).
-	html := render_layout_native(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta)
+	# Kujo 1.5's native JSON-LD encoder does not escape HTML script delimiters or
+	# every JSON control character. Keep its fast path for ordinary metadata and
+	# use the existing compatible renderer when those characters are present.
+	metadata_json := to_json([settings["site_title"], settings["site_tagline"], settings["site_url"], page_title, meta_description, page_meta])
+	html := ""
+	if contains(metadata_json, "<") || contains(metadata_json, "\\u00") || contains(metadata_json, "\\b") || contains(metadata_json, "\\f") {
+		html = render_layout_interpreted(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta)
+	} else {
+		html = render_layout_native(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta)
+	}
 	webmcp_skip := false
 	if has_key(page_meta, "webmcp_skip") {
 		webmcp_skip = parse_bool_value(page_meta["webmcp_skip"], false)
@@ -4832,8 +4852,8 @@ func build_site(settings) {
 					location_preview = storefront_preview
 				}
 				index_content = apply_template(home_listing_template, {
-					"title": settings["site_title"],
-					"description": settings["site_tagline"],
+					"title": template_text(settings["site_title"]),
+					"description": template_text(settings["site_tagline"]),
 					"cards": cards,
 					"items": cards,
 					"posts": cards,
@@ -4886,7 +4906,7 @@ func build_site(settings) {
 				if len(blog_listing_template) > 0 {
 					blog_content = apply_template(blog_listing_template, {
 						"title": "Blog",
-						"description": settings["site_tagline"],
+						"description": template_text(settings["site_tagline"]),
 						"cards": cards,
 						"items": cards,
 						"posts": cards,

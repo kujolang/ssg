@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 
@@ -96,6 +97,22 @@ def first_headings(markdown: str) -> list[str]:
     return headings
 
 
+def markdown_files(content_root: Path) -> list[Path]:
+    files = []
+    for directory, directories, names in os.walk(content_root, followlinks=False):
+        parent = Path(directory)
+        directories[:] = sorted(name for name in directories if not name.startswith(".") and not (parent / name).is_symlink())
+        for name in names:
+            path = parent / name
+            if name.startswith(".") or path.suffix != ".md":
+                continue
+            if path.is_symlink():
+                print(f"Warning: Skipped symlink while scanning docs content: {path}")
+            elif path.is_file():
+                files.append(path)
+    return sorted(files)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--content", default="content")
@@ -112,7 +129,7 @@ def main() -> int:
         base_route = ""
 
     entries = []
-    for file_path in sorted(path for path in content_root.rglob("*.md") if not any(part.startswith(".") for part in path.parts)):
+    for file_path in markdown_files(content_root):
         meta, body = parse_frontmatter(file_path.read_text(encoding="utf-8"))
         if bool(meta.get("draft")) or bool(meta.get("search_exclude")):
             continue
