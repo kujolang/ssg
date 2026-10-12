@@ -7,6 +7,7 @@ The validated release path for this repo is standard Kujo VM execution.
 Use the release gate before shipping changes:
 
 ```bash
+npm ci --ignore-scripts
 bash scripts/run_release_gate.sh
 ```
 
@@ -36,3 +37,8 @@ CI and release validation now execute `kujo run ./build.kujo` directly. If you a
 After the gate passes, commit and push the release, create its annotated `v<version>` tag, and publish a GitHub Release with the matching changelog notes. Tag pushes alone do not publish a Kennel package.
 
 Update the SSG ecosystem page in `kujolang/kujolang.ai`, the showcase and release inventory in `kujolang/docs.kujolang.ai`, and the docs workflow's immutable SSG revision. Build and verify both sites, then deploy through their documented Pages flows. Refresh `kujolang/kujolang-mcp` from the committed website source, update its build-input pin, regenerate and validate the Worker, deploy, and verify live catalog parity. Dispatch the Kennel registry release reconciler for the published release and verify its exact-version metadata and archive.
+
+Frozen fingerprints may be refreshed only after explaining intentional output
+changes and comparing every unaffected file against the old baseline. Parser
+minification coverage in `scripts/test-minification.py` also checks executable
+JavaScript behavior, CSS token boundaries, and fail-closed tool/parse errors.

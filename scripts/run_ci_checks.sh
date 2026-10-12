@@ -64,11 +64,13 @@ main() {
 	verify_kujo_bin "$kujo_bin"
 
 	export KUJO_BIN="$kujo_bin"
+	export SSG_ESBUILD_BIN="${SSG_ESBUILD_BIN:-$REPO_ROOT/node_modules/.bin/esbuild}"
 
 	cd "$REPO_ROOT"
 	python3 scripts/test-hardening-contract.py
 	python3 scripts/test-content-boundaries.py
 	python3 scripts/test-docs-pipeline.py
+	python3 scripts/test-minification.py
 	node scripts/test-docs-search-runtime.js
 	bash scripts/test-cli-contract.sh
 	bash scripts/test-generated-contract.sh

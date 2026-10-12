@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export SSG_ESBUILD_BIN="${SSG_ESBUILD_BIN:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/node_modules/.bin/esbuild}"
+
 LAST_OUTPUT=""
 
 run_capture() {

@@ -17,7 +17,7 @@ notes = "Stable SSG build surface with a preview local Ability pack adapter."
 minimum_version = "1.2.0"
 entry = "build.kujo"
 sources = ["."]
-includes = ["README.md", "abilities", "assets", "content", "docs", "scripts", "templates"]
+includes = ["README.md", "package.json", "package-lock.json", "abilities", "assets", "content", "docs", "scripts", "templates"]
 excludes = [".git", "kennel_packages", "output", "tmp", "node_modules"]
 
 [dependencies.ability]

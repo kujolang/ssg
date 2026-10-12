@@ -48,6 +48,7 @@ rg -n "print\\(|echo|printf|cat <<|TODO|FIXME|example|generated|legacy|expected"
 Use the standard Kujo VM path:
 
 ```bash
+npm ci --ignore-scripts
 bash scripts/run_ci_checks.sh
 ```
 

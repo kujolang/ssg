@@ -431,7 +431,7 @@ EOF
 	assert_file_contains output-cli-fields/cli-only/index.html 'CLI Override Title'
 	assert_file_contains output-cli-fields/cli-only/index.html 'CLI override tagline wins.'
 	assert_file_contains output-cli-fields/cli-only/index.html 'cli-template-marker'
-	assert_file_contains output-cli-fields/assets/css/style.min.css 'body{background:#123456;color:#fefefe;}'
+	assert_file_contains output-cli-fields/assets/css/style.min.css 'body{background:#123456;color:#fefefe}'
 	assert_file_contains output-cli-fields/remote-image-proof/index.html '/images/cli-remote-proof-'
 	assert_glob_exists 'output-cli-fields/images/cli-remote-proof-*.webp'
 

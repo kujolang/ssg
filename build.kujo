@@ -2518,42 +2518,66 @@ func copy_tree(src, dst) {
 	}
 }
 
-func minify_text(text) {
-	out := regex_replace(text, "\\s+", " ")
-	out := regex_replace(out, "\\s*([{}:;,])\\s*", "$1")
-	return trim(out)
+# The CLI is pinned so generated assets do not depend on ambient tool versions.
+func resolve_minifier() {
+	binary := trim(env("SSG_ESBUILD_BIN"))
+	command := [binary]
+	if len(binary) == 0 {
+		command = ["esbuild"]
+		if path_exists("node_modules/esbuild/bin/esbuild") {
+			# Invoke the portable Node entry point, not npm's OS-specific .bin shim.
+			command = ["node", path_absolute("node_modules/esbuild/bin/esbuild")]
+		}
+	}
+	instructions := "Error: minification requires esbuild 0.28.2. Run npm ci --ignore-scripts in the SSG/site directory, or set SSG_ESBUILD_BIN to that version's executable."
+	try {
+		result := spawn_process(push(command, "--version"), {"timeout_ms": 10000, "max_output_bytes": 65536})
+		if !result.success || trim(result.stdout) != "0.28.2" || result.stdout_truncated || result.stderr_truncated {
+			print(instructions)
+			exit(1)
+		}
+	} except err {
+		print(instructions + "\n" + to_string(err))
+		exit(1)
+	}
+	return command
 }
 
-func minify_assets_recursive(path) {
-	if !path_exists(path) {
-		return null
+func minify_assets_recursive(path, command) {
+	if !path_exists(path) { return null }
+	if path_is_symlink(path) {
+		print("Error: refusing to minify symlink: " + path)
+		exit(1)
 	}
 	if path_is_dir(path) {
-		entries := list_dir(path)
-		entry_idx := 0
-		loop {
-			if entry_idx >= len(entries) {
-				break
-			}
-
-			entry := entries[entry_idx]
-			entry_idx := entry_idx + 1
-			minify_assets_recursive(path_join(path, entry))
+		for entry in list_dir(path) {
+			minify_assets_recursive(path_join(path, entry), command)
 		}
 		return null
 	}
-
 	file_name := basename(path)
+	if contains(file_name, ".min.") { return null }
 	if ends_with(file_name, ".css") || ends_with(file_name, ".js") {
-		if contains(file_name, ".min.") {
-			return null
-		}
-		data := read_file(path)
-		minified := minify_text(data)
 		ext := path_extension(file_name)
-		base := replace(file_name, "." + ext, "")
-		min_name := base + ".min." + ext
-		write_file(path_join(dirname(path), min_name), minified)
+		base := substring(file_name, 0, len(file_name) - len(ext) - 1)
+		destination := path_join(dirname(path), base + ".min." + ext)
+		if path_exists(destination) {
+			print("Error: minified destination already exists: " + destination)
+			exit(1)
+		}
+		# Parse and print without bundling, identifier renaming, syntax rewrites,
+		# or dropping legal comments. Absolute input paths cannot become flags.
+		minify_command := command
+		for argument in [path_absolute(path), "--minify-whitespace", "--platform=neutral", "--legal-comments=inline", "--charset=utf8", "--log-level=warning", "--outfile=" + absolute_config_path(destination)] {
+			minify_command = push(minify_command, argument)
+		}
+		result := spawn_process(minify_command, {"timeout_ms": 300000, "max_output_bytes": 1048576})
+		if !result.success || result.stdout_truncated || result.stderr_truncated {
+			if path_exists(destination) { delete_file(destination) }
+			print("Error: could not minify " + path + "\n" + result.stdout + result.stderr)
+			exit(1)
+		}
+		if len(result.stderr) > 0 { print(result.stderr) }
 	}
 }
 
@@ -3855,6 +3879,11 @@ func build_site(settings) {
 	do_posts := phase == "full" || phase == "posts"
 	do_finalize := phase == "full" || phase == "finalize"
 
+	minifier := []
+	if settings["minify"] && (do_setup || do_finalize) {
+		minifier = resolve_minifier()
+	}
+
 	if do_setup {
 		if path_exists(output_dir) {
 			delete_tree(output_dir)
@@ -5100,7 +5129,7 @@ func build_site(settings) {
 	}
 
 	if settings["minify"] {
-		minify_assets_recursive(path_join(output_dir, "assets"))
+		minify_assets_recursive(path_join(output_dir, "assets"), minifier)
 	}
 
 	total_time := (performance_now() - build_start) / 1000.0

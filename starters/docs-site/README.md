@@ -2,6 +2,10 @@
 
 This starter turns Kujo SSG into a reusable documentation site package. It is local-first, deterministic, and designed to pair with `scripts/docgen_ssg_bridge.kujo`.
 
+Install the pinned minifier once from the packaged site root with
+`npm ci --ignore-scripts` (Node.js 18+). Minified builds require esbuild 0.28.2;
+set `minify: false` to build without it.
+
 ## Update Generated Reference
 
 From this starter root:

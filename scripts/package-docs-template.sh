@@ -20,6 +20,7 @@ PACKAGE_ROOT="$STAGING_PARENT/$PACKAGE_NAME"
 mkdir -p "$PACKAGE_ROOT/scripts"
 
 cp -R "$REPO_ROOT/starters/docs-site/." "$PACKAGE_ROOT/"
+cp "$REPO_ROOT/package.json" "$REPO_ROOT/package-lock.json" "$PACKAGE_ROOT/"
 cp "$REPO_ROOT/build.kujo" "$PACKAGE_ROOT/build.kujo"
 cp "$REPO_ROOT/scripts/docgen_ssg_bridge.kujo" "$PACKAGE_ROOT/scripts/docgen_ssg_bridge.kujo"
 cp "$REPO_ROOT/scripts/docgen_reduce.py" "$PACKAGE_ROOT/scripts/docgen_reduce.py"
