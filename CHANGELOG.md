@@ -1,8 +1,28 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 - 2026-10-12
+
+### Upgrade notes
+- Minified builds require esbuild 0.28.2. Run `npm ci --ignore-scripts` in the
+  repository or packaged docs site; standalone setup is documented in README.
+- Remote image requests reject non-public destinations unless both image
+  mirroring and `--allow-private-remote-images` are explicitly enabled.
+- Ability definitions and pack versions remain independent and unchanged.
+
+### Added
+- Expose resolved build settings through `--inspect-config` for deterministic
+  integration with the DocGen pipeline.
+- Add `--repository-check-timeout` to give multi-command repository CI its own
+  explicit budget (default 3600 seconds).
 
 ### Fixed
+- Contain custom template, content, asset, and generated-doc paths; reject
+  symlink escapes and avoid publishing private or external metadata.
+- Bound Ability inspection memory and output traversal, defer unnecessary
+  hashing, and stop failed parallel build batches with worker cleanup.
+- Keep DocGen paths aligned with the builder's configuration precedence,
+  preserve repeat-run receipts, and run repository checks before the final
+  requested build so fixture settings cannot replace the user's output.
 - Keep JSON-LD metadata opaque to later template substitutions, including on
   older runtimes using the compatible renderer.
 - Replace regex CSS/JS rewriting with pinned esbuild 0.28.2 parser-based
