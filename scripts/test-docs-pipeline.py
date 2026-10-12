@@ -304,6 +304,43 @@ class Pipeline(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(sentinel.read_text(), "KEEP")
 
+    def test_repository_gate_budget_logs_and_failure(self):
+        ci = self.root / "scripts/run_ci_checks.sh"
+        # More output than the in-memory preview must survive in the log files.
+        ci.write_text(
+            "#!/bin/bash\npython3 -c 'print(\"evidence\" * 20000)'\nprintf diagnostic >&2\nexit 7\n"
+        )
+        result = self.run_kujo(
+            "scripts/docgen_ssg_bridge.kujo", "--docgen-payload", self.payload()
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("exit code 7", result.stdout)
+        self.assertLess(len(result.stdout), 4096)
+        logs = list((self.root / ".docgen/output").glob("ci-*"))
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(
+            (logs[0] / "stdout.log").read_text(), "evidence" * 20000 + "\n"
+        )
+        self.assertEqual((logs[0] / "stderr.log").read_text(), "diagnostic")
+        self.assertFalse((self.root / "published site").exists())
+        # A CPU-bound fixture proves the explicit deadline without arbitrary sleeps.
+        ci.write_text("#!/bin/bash\nwhile :; do :; done\n")
+        result = self.run_kujo(
+            "scripts/docgen_ssg_bridge.kujo",
+            "--docgen-payload",
+            self.payload(),
+            "--repository-check-timeout",
+            "1",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("timed out", result.stdout)
+        for value in ["0", "-1", "1.5", "86401", "garbage"]:
+            result = self.run_kujo(
+                "scripts/docgen_ssg_bridge.kujo", "--repository-check-timeout", value
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("1 to 86400", result.stdout)
+
     def test_bad_pipeline_config_fails_before_generating_content(self):
         self.config["output"] = "source docs"
         self.write_config()

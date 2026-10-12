@@ -32,6 +32,7 @@ func usage() {
 	print("  --allow-adapter-low-yield         Permit DOCGEN_ADAPTER_LOW_YIELD")
 	print("  --skip-build                      Generate Markdown only")
 	print("  --skip-validation                 Skip SSG validation and repository checks")
+	print("  --repository-check-timeout <s>    CI budget, 1-86400 seconds (default: 3600)")
 	print("  --skip-repository-checks          Validate the site without running repository CI")
 	print("  --output <path>                   Override configured build output")
 	print("  --dry-run                         Render existing --docgen-payload in memory only")
@@ -73,6 +74,43 @@ func int_option(cli_args, name, fallback) {
 		return fallback
 	}
 	return parse_int(raw)
+}
+
+func repository_check_timeout(cli_args) {
+	raw := option_value(cli_args, "--repository-check-timeout", "3600")
+	if len(raw) == 0 || len(raw) > 5 || regex_replace(raw, "[0-9]", "") != "" {
+		fail("--repository-check-timeout must be an integer from 1 to 86400 seconds")
+	}
+	seconds := parse_int(raw)
+	if seconds < 1 || seconds > 86400 {
+		fail("--repository-check-timeout must be an integer from 1 to 86400 seconds")
+	}
+	return seconds * 1000
+}
+
+func run_repository_checks(config, ssg_root, docgen_out) {
+	# CI is a multi-command gate, not one bounded build. Keep its budget separate
+	# and spool complete evidence instead of retaining all logs in memory.
+	log_dir := under_root(ssg_root, path_join(docgen_out, "ci-" + uuid_v4()), "CI logs")
+	ensure_dir(log_dir)
+	stdout_path := path_join(log_dir, "stdout.log")
+	stderr_path := path_join(log_dir, "stderr.log")
+	print("Repository checks: logs in " + log_dir)
+	result := spawn_process(["bash", "-c", "exec bash scripts/run_ci_checks.sh >\"$1\" 2>\"$2\"", "kujo-ssg-ci", stdout_path, stderr_path], {
+		"cwd": ssg_root,
+		"timeout_ms": config["repository_check_timeout_ms"],
+		"max_output_bytes": 65536,
+		"inherit_env": true
+	})
+	# The fixed shell program redirects to positional argv paths, never interpolated
+	# shell text. Kujo stream_* options also cap disk logs, so use OS redirection.
+	if !result.success {
+		if result.timed_out {
+			fail("Repository checks timed out after " + to_string(config["repository_check_timeout_ms"] / 1000) + " seconds; logs: " + log_dir)
+		}
+		fail("Repository checks failed with exit code " + to_string(result.exitcode) + "; logs: " + log_dir)
+	}
+	print("Repository checks passed; logs: " + log_dir)
 }
 
 func ensure_dir(dir_path) {
@@ -890,6 +928,7 @@ func config_from_args(cli_args) {
 		"allow_adapter_low_yield": flag_present(cli_args, "--allow-adapter-low-yield"),
 		"build_output": option_value(cli_args, "--output", ""),
 		"skip_repository_checks": flag_present(cli_args, "--skip-repository-checks"),
+		"repository_check_timeout_ms": repository_check_timeout(cli_args),
 		"skip_build": flag_present(cli_args, "--skip-build"),
 		"skip_validation": flag_present(cli_args, "--skip-validation"),
 		"dry_run": flag_present(cli_args, "--dry-run")
@@ -984,7 +1023,7 @@ if config["skip_build"] || config["dry_run"] {
 	# Repository checks build their own fixtures/site. Run them before the final
 	# requested build so they cannot replace its URL or output with CI defaults.
 	if !config["skip_validation"] && !config["skip_repository_checks"] {
-		run_command(["bash", "scripts/run_ci_checks.sh"], ssg_root, false)
+		run_repository_checks(config, ssg_root, docgen_out)
 	}
 	run_command(build_command, ssg_root, false)
 	if config["skip_validation"] {
