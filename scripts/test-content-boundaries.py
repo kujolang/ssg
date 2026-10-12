@@ -76,6 +76,10 @@ class Publication(unittest.TestCase):
             + json.dumps(cls.description)
             + '\nauthor: 1\ntemplate: docs\nprevious: "java\\tscript:alert(1)"\nnext: /safe:next/\n---\nSafe body\n'
         )
+        cls.placeholder_title = "Literal {{lang}} {{stylesheet_path}} {{content}}"
+        (cls.content / "posts" / "placeholders.md").write_text(
+            "---\ntitle: " + json.dumps(cls.placeholder_title) + "\n---\nBody with a [link](https://example.test).\n"
+        )
         shutil.copytree(REPO / "templates", cls.root / "templates")
         cls.result = run("build.kujo", cls.root, "--site-url", "https://example.test")
         if cls.result.returncode:
@@ -107,6 +111,17 @@ class Publication(unittest.TestCase):
             any("script:" in href.lower().replace("\t", "") for href in parsed.links)
         )
 
+    def test_json_metadata_is_not_reinterpreted_as_template_source(self):
+        parsed = Scripts()
+        parsed.feed((self.root / "output/blog/placeholders/index.html").read_text())
+        metadata = [
+            json.loads(body)
+            for attrs, body in parsed.scripts
+            if attrs.get("type") == "application/ld+json"
+        ]
+        self.assertEqual(metadata[0]["headline"], self.placeholder_title)
+        self.assertEqual(metadata[0]["name"], self.placeholder_title)
+
     def test_collection_roots_and_lookup_links_are_not_published(self):
         for file in (self.root / "output").rglob("*"):
             if file.is_file() and file.suffix in (".html", ".json", ".xml", ".txt"):
@@ -127,7 +142,11 @@ class Publication(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         payload = json.loads((self.root / "search.json").read_text())
-        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(len(payload["items"]), 2)
+        self.assertEqual(
+            {item["title"] for item in payload["items"]},
+            {self.title, self.placeholder_title},
+        )
         self.assertNotIn("EXTERNAL-PUBLICATION-SENTINEL", json.dumps(payload))
 
 

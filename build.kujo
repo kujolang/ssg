@@ -2182,8 +2182,9 @@ func absolute_media_url(path_value, site_url) {
 func json_escape(value) {
 	# JSON string serialization plus the HTML script-data boundary. Escaping '<'
 	# prevents both closing-script and legacy HTML-comment parser transitions.
+	# Escape opening braces so later template passes cannot reinterpret JSON data.
 	encoded := to_json(to_string(value))
-	return replace(substring(encoded, 1, len(encoded) - 1), "<", "\\u003c")
+	return replace(replace(substring(encoded, 1, len(encoded) - 1), "<", "\\u003c"), "{", "\\u007b")
 }
 
 func webmcp_runtime_source() {
@@ -2240,10 +2241,10 @@ func render_layout(layout_template, settings, route, page_title, meta_descriptio
 	# previous interpreted body, which is preserved as render_layout_interpreted).
 	# Kujo 1.5's native JSON-LD encoder does not escape HTML script delimiters or
 	# every JSON control character. Keep its fast path for ordinary metadata and
-	# use the existing compatible renderer when those characters are present.
+	# use the compatible renderer for those characters or template markers.
 	metadata_json := to_json([settings["site_title"], settings["site_tagline"], settings["site_url"], page_title, meta_description, page_meta])
 	html := ""
-	if contains(metadata_json, "<") || contains(metadata_json, "\\u00") || contains(metadata_json, "\\b") || contains(metadata_json, "\\f") {
+	if contains(metadata_json, "<") || contains(metadata_json, "{{") || contains(metadata_json, "\\u00") || contains(metadata_json, "\\b") || contains(metadata_json, "\\f") {
 		html = render_layout_interpreted(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta)
 	} else {
 		html = render_layout_native(layout_template, settings, route, page_title, meta_description, navigation, content, page_meta)
