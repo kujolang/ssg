@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Fixed
+- Keep JSON-LD metadata opaque to later template substitutions, including on
+  older runtimes using the compatible renderer.
+- Replace regex CSS/JS rewriting with pinned esbuild 0.28.2 parser-based
+  minification. Minified builds now require `npm ci --ignore-scripts`.
+- Give DocGen repository checks a separate configurable deadline and preserve
+  complete stdout/stderr evidence behind concise success/failure receipts.
 - Deny non-public remote image and Google Font destinations by default, pin DNS,
   refuse redirects, and cap response sizes; private image mirroring now requires
   an explicit trusted-local opt-in.

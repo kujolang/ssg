@@ -69,6 +69,9 @@ pages never receive write or deploy authority. See
 ## Requirements
 
 - Kujo CLI available on your `PATH`
+- esbuild 0.28.2 when minification is enabled (as in the bundled config);
+  install the pinned package using Node.js 18+ and `npm ci --ignore-scripts`,
+  or supply its native executable through `SSG_ESBUILD_BIN`
 - `cwebp` available on your `PATH` for size-optimized featured-image conversion
 
 ## Runtime Capabilities
@@ -90,7 +93,7 @@ kujo run --untrusted \
 
 (`--allow-net-client` is only needed when the build downloads Google Fonts or
 remote images; `--allow-process-exec` enables the optional `cwebp` optimized
-image path; `--allow-fs-*` and `--allow-clock` are needed for every build.)
+image path and is required for minification; `--allow-fs-*` and `--allow-clock` are needed for every build.)
 
 Note: passing any single `--allow-*` flag switches the runtime out of trusted
 mode, so you must then enumerate every capability the build uses (filesystem
@@ -101,6 +104,7 @@ included). For most users the default trusted path is the right choice.
 Build the bundled starter site from the project root:
 
 ```bash
+npm ci --ignore-scripts
 kujo run ./build.kujo -- --site-url https://example.com
 ```
 
@@ -221,10 +225,16 @@ Gate controls:
 - `--skip-validation`: skip repository CI and generated-output validation.
 - `--skip-repository-checks`: skip repository CI while retaining generated-output
   validation; use this for packaged sites, which do not include repository tests.
+- `--repository-check-timeout <seconds>`: repository CI deadline, 1–86400 seconds
+  (default 3600). Individual build commands retain their five-minute deadline.
 - `--output <path>`: override the configured build output directory.
 
 When enabled, repository checks run before the final requested build so their
-fixture builds cannot replace the requested site URL or output. Output validation
+fixture builds cannot replace the requested site URL or output. Complete CI stdout
+and stderr are saved under `<docgen-out>/ci-<unique-id>/`; the bridge prints the
+location and fails on a nonzero exit or expired deadline. These evidence files
+remain until you remove them; include that directory in your artifact retention
+policy. Output validation
 uses the builder’s resolved output directory. When building, the default generated
 Markdown destination follows the configured content root (`<content>/reference`).
 Conversion-only `--skip-build` and `--dry-run` keep the `content/reference` default
@@ -368,7 +378,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--robots <public|private>`
 - `--llms <public|private>`
 - `--watch`: reserved, currently not implemented
-- `--minify`: emit minified CSS/JS assets
+- `--minify`: emit parser-minified CSS/JS assets (requires esbuild 0.28.2)
 - `--download-remote-images`: mirror remote `featured_image` URLs into output (needs outbound network — see [Runtime Capabilities](#runtime-capabilities))
 - `--allow-private-remote-images`: explicitly permit loopback/private remote image sources; ignored unless remote-image mirroring is enabled
 - `--drafts`: include `draft: true` content in the build (preview/staging workflow); omitted by default
@@ -707,3 +717,28 @@ content directory name, and items follow the configured `sort_by` order.
 - Main contract tests: `scripts/test-cli-contract.sh`, `scripts/test-generated-contract.sh`
 - Primary validation path: `bash scripts/run_ci_checks.sh`
 - Release gate: `bash scripts/run_release_gate.sh`
+
+### Minifier dependency
+
+Minification uses esbuild 0.28.2 with whitespace minimization only: JavaScript
+identifiers and syntax are retained, assets are not bundled, and legal comments
+stay inline. Strings, regular expressions, template literals, and CSS token
+boundaries are parsed instead of rewritten with regular expressions. Invalid
+JavaScript or CSS that esbuild rejects fails the build; warnings remain visible.
+
+Run `npm ci --ignore-scripts` in the repository or packaged site. Resolution uses
+`SSG_ESBUILD_BIN`, then the local `node_modules/esbuild/bin/esbuild` Node entry point, then
+`esbuild` on `PATH`. A missing or mismatched version fails before output cleanup.
+The builder does not download tools. Sites with `minify: false` need no minifier.
+For a standalone builder or `--init` site without these npm manifests, install
+locally with:
+
+```bash
+npm install --prefix . --save-dev --save-exact --ignore-scripts esbuild@0.28.2
+```
+
+`--prefix .` keeps this install in the site even when an ancestor has a package
+manifest. Keep the generated lockfile for subsequent `npm ci --ignore-scripts`
+installs.
+Existing `.min.*` assets are copied unchanged; generated `.min.css` and `.min.js`
+bytes intentionally differ from earlier regex-based output.
