@@ -11,7 +11,7 @@ func usage() {
 	print("")
 	print("Options:")
 	print("  --ssg-root <path>                 SSG site root (default: current directory)")
-	print("  --content-out <path>              Generated Markdown root (default: content/reference)")
+	print("  --content-out <path>              Generated Markdown root (default: <content>/reference when building)")
 	print("  --docgen-out <path>               DocGen output root (default: .docgen/output)")
 	print("  --cache-dir <path>                DocGen cache root (default: .docgen/cache)")
 	print("  --site-url <url>                  SSG build URL (default: https://example.com)")
@@ -31,7 +31,9 @@ func usage() {
 	print("  --max-discovery-skips <n>         Per-counter skip threshold (default: 0)")
 	print("  --allow-adapter-low-yield         Permit DOCGEN_ADAPTER_LOW_YIELD")
 	print("  --skip-build                      Generate Markdown only")
-	print("  --skip-validation                 Skip SSG validation after build")
+	print("  --skip-validation                 Skip SSG validation and repository checks")
+	print("  --skip-repository-checks          Validate the site without running repository CI")
+	print("  --output <path>                   Override configured build output")
 	print("  --dry-run                         Render existing --docgen-payload in memory only")
 }
 
@@ -584,8 +586,8 @@ func run_docgen(config, ssg_root, docgen_out, cache_dir) {
 		}
 	}
 	stdout := run_command(command, ssg_root, true)
-	payload_path := path_join(docgen_out, "docgen-cli.json")
-	write_file(payload_path, stdout)
+	payload_path := generated_path(docgen_out, "docgen-cli.json")
+	write_file(payload_path, stdout, true)
 	return {"payload": parse_json(stdout), "payload_path": payload_path}
 }
 
@@ -867,7 +869,7 @@ func config_from_args(cli_args) {
 	return {
 		"target_repo": option_value(cli_args, "--target-repo", ""),
 		"ssg_root": option_value(cli_args, "--ssg-root", os_getcwd()),
-		"content_out": option_value(cli_args, "--content-out", "content/reference"),
+		"content_out": option_value(cli_args, "--content-out", ""),
 		"docgen_out": option_value(cli_args, "--docgen-out", ".docgen/output"),
 		"cache_dir": option_value(cli_args, "--cache-dir", ".docgen/cache"),
 		"site_url": option_value(cli_args, "--site-url", "https://example.com"),
@@ -886,6 +888,8 @@ func config_from_args(cli_args) {
 		"max_warnings": int_option(cli_args, "--max-warnings", 0),
 		"max_discovery_skips": int_option(cli_args, "--max-discovery-skips", 0),
 		"allow_adapter_low_yield": flag_present(cli_args, "--allow-adapter-low-yield"),
+		"build_output": option_value(cli_args, "--output", ""),
+		"skip_repository_checks": flag_present(cli_args, "--skip-repository-checks"),
 		"skip_build": flag_present(cli_args, "--skip-build"),
 		"skip_validation": flag_present(cli_args, "--skip-validation"),
 		"dry_run": flag_present(cli_args, "--dry-run")
@@ -897,9 +901,36 @@ if config["dry_run"] && len(config["docgen_payload"]) == 0 {
 	fail("--dry-run requires --docgen-payload; generating DocGen artifacts would write files")
 }
 ssg_root := path_absolute(config["ssg_root"])
-content_root := under_root(ssg_root, config["content_out"], "--content-out")
+content_out := config["content_out"]
 docgen_out := under_root(ssg_root, config["docgen_out"], "--docgen-out")
 cache_dir := under_root(ssg_root, config["cache_dir"], "--cache-dir")
+
+# Resolve and validate build paths before generating or deleting any Markdown.
+build_command := [config["kujo_bin"], "run", "./build.kujo", "--", "--site-url", config["site_url"]]
+if len(config["build_output"]) > 0 {
+	build_command = push(build_command, "--output")
+	build_command = push(build_command, config["build_output"])
+}
+build_output := ""
+if !config["skip_build"] && !config["dry_run"] {
+	inspection := run_command(push(build_command, "--inspect-config"), ssg_root, true)
+	receipt := parse_json(trim(inspection))
+	if !is_dict(receipt) || receipt["schema_version"] != "kujo-ssg-config/v1" || receipt["ok"] != true || !is_dict(receipt["settings"]) {
+		fail("build.kujo returned an invalid configuration receipt")
+	}
+	build_output = receipt["settings"]["output"]
+	if len(content_out) == 0 {
+		content_out = path_join(receipt["settings"]["content"], "reference")
+	}
+	if !config["skip_validation"] && !config["skip_repository_checks"] && !path_exists(path_join(ssg_root, "scripts/run_ci_checks.sh")) {
+		fail("Repository CI script is missing; use --skip-repository-checks for a packaged site (generated-output validation remains enabled)")
+	}
+}
+
+if len(content_out) == 0 {
+	content_out = "content/reference"
+}
+content_root := under_root(ssg_root, content_out, "--content-out")
 
 payload := {}
 payload_path := ""
@@ -950,11 +981,15 @@ print_summary(payload, generated_files, content_root)
 if config["skip_build"] || config["dry_run"] {
 	skipped_build := true
 } else {
-	run_command([config["kujo_bin"], "run", "./build.kujo", "--", "--site-url", config["site_url"]], ssg_root, false)
+	# Repository checks build their own fixtures/site. Run them before the final
+	# requested build so they cannot replace its URL or output with CI defaults.
+	if !config["skip_validation"] && !config["skip_repository_checks"] {
+		run_command(["bash", "scripts/run_ci_checks.sh"], ssg_root, false)
+	}
+	run_command(build_command, ssg_root, false)
 	if config["skip_validation"] {
 		skipped_validation := true
 	} else {
-		run_command(["bash", "scripts/validate-generated-output.sh", "output"], ssg_root, false)
-		run_command(["bash", "scripts/run_ci_checks.sh"], ssg_root, false)
+		run_command(["bash", "scripts/validate-generated-output.sh", build_output], ssg_root, false)
 	}
 }

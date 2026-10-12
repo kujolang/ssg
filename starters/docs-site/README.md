@@ -14,7 +14,9 @@ kujo run scripts/update_docs.kujo -- \
 	--strict
 ```
 
-The update command writes generated reference Markdown under `content/reference/generated`, refreshes `assets/js/docs-search-index.json`, builds the SSG output, and validates it.
+The update command writes generated reference Markdown under `<content>/reference/generated`, refreshes `<assets>/js/docs-search-index.json`, builds the configured output, and validates it. Roots come from `kujo-ssg.yml` (or the builder’s other supported config formats). `--content`, `--output`, `--assets`, and `--templates` override them for the whole update; `--content-out` and `--search-index` override individual destinations. Pass `--site-url` for the published site.
+
+When calling `docgen_ssg_bridge.kujo` directly in this packaged starter, pass `--skip-repository-checks`: repository CI scripts are not packaged. Generated-output validation still runs.
 
 For a fuller preview that includes private/internal example symbols and builtin/native APIs, add `--include-private --include-builtins`. Keep the default public-only mode for published API docs unless the project intentionally documents internals.
 

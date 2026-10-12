@@ -217,8 +217,18 @@ Gate controls:
 - `--max-discovery-skips <n>`: fail when any discovery skip counter exceeds the
   threshold.
 - `--allow-adapter-low-yield`: permit `DOCGEN_ADAPTER_LOW_YIELD` diagnostics.
-- `--skip-build` and `--skip-validation`: useful for fixture tests or previewing
-  Markdown conversion only.
+- `--skip-build`: generate Markdown without building or validating the site.
+- `--skip-validation`: skip repository CI and generated-output validation.
+- `--skip-repository-checks`: skip repository CI while retaining generated-output
+  validation; use this for packaged sites, which do not include repository tests.
+- `--output <path>`: override the configured build output directory.
+
+When enabled, repository checks run before the final requested build so their
+fixture builds cannot replace the requested site URL or output. Output validation
+uses the builder’s resolved output directory. When building, the default generated
+Markdown destination follows the configured content root (`<content>/reference`).
+Conversion-only `--skip-build` and `--dry-run` keep the `content/reference` default
+and do not require a builder configuration. Explicit `--content-out` is preserved.
 
 The bridge only deletes files listed in
 `<content-out>/.docgen-ssg-manifest.json`, and it refuses content, DocGen output,
@@ -274,8 +284,13 @@ kujo run scripts/update_docs.kujo -- \
 ```
 
 The update script runs DocGen with an incremental cache, bridges only generated
-reference content into `content/reference/generated`, refreshes the local search
-index, builds the site, and validates the generated output.
+reference content into `<content>/reference/generated`, refreshes the local search
+index at `<assets>/js/docs-search-index.json`, builds the site, and validates the
+resolved output directory. It uses the builder’s configuration precedence and
+path validation. `--content`, `--output`, `--assets`, and `--templates` override
+those roots for the entire update; `--content-out` and `--search-index` remain
+explicit destination overrides. The existing default site URL is
+`https://example.com`; pass `--site-url` for the published site.
 
 ## Project Layout
 
@@ -365,6 +380,7 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 - `--no-index`: skip index and blog listing pages
 - `--no-aux`: skip feed, sitemap, robots, and llms outputs
 - `--no-aliases`: skip flat `.html` redirect aliases (emit clean `dir/index.html` only); halves per-page write I/O on large sites
+- `--inspect-config`: validate and print resolved content/output/templates/assets paths and site URL as JSON without building or writing files
 - `--version`
 - `--help`
 
@@ -372,6 +388,12 @@ Unknown flags, missing option values, malformed YAML/JSON config, invalid boolea
 Internal parallel-build shard values are also validated
 (`0 <= shard < shards <= 256`). The benchmark-content generator only replaces
 directories bearing its `.kujo-ssg-benchmark-content` ownership marker.
+
+Automation can run `kujo run build.kujo -- --inspect-config` with the same path
+overrides as a build. Success emits only a `kujo-ssg-config/v1` JSON object with
+`ok: true` and `settings`; invalid configuration emits `ok: false` and `errors`
+with exit code 1. It does not expose arbitrary configuration keys. Inspection
+cannot be combined with `--init`, `--help`, or `--version`.
 
 ## Content Model
 

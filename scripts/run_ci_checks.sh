@@ -68,6 +68,7 @@ main() {
 	cd "$REPO_ROOT"
 	python3 scripts/test-hardening-contract.py
 	python3 scripts/test-content-boundaries.py
+	python3 scripts/test-docs-pipeline.py
 	node scripts/test-docs-search-runtime.js
 	bash scripts/test-cli-contract.sh
 	bash scripts/test-generated-contract.sh

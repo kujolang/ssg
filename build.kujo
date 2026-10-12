@@ -15,13 +15,6 @@ func print_lines(lines) {
 	}
 }
 
-print_lines([
-	"╔════════════════════════════════════════════════╗",
-	"║        Kujo Static Site Generator              ║",
-	"╚════════════════════════════════════════════════╝",
-	""
-])
-
 func print_help() {
 	print_lines([
 		"Usage: kujo run ./build.kujo [options]",
@@ -49,6 +42,7 @@ func print_help() {
 		"  --blog-slug <slug>            Blog root slug (default: blog)",
 		"  --posts-at-root               Keep post permalinks at /<slug>/",
 		"  --init <yml|yaml|json>        Bootstrap starter project",
+		"  --inspect-config              Print resolved paths/site URL as JSON; do not build",
 		"  --version                     Print version and exit",
 		"  --help                        Show this help and exit",
 		"",
@@ -3403,6 +3397,7 @@ func init_project(format_name) {
 func load_config(settings) {
 	result := {
 		"settings": settings,
+		"loaded_path": "",
 		"errors": []
 	}
 
@@ -3442,7 +3437,7 @@ func load_config(settings) {
 		} else {
 			result["errors"] = push(result["errors"], "Could not parse " + config_path + ": expected a top-level object")
 		}
-		print("Loaded configuration from " + config_path)
+		result["loaded_path"] = config_path
 	} except err {
 		result["errors"] = push(result["errors"], "Could not parse " + config_path + ": " + safe_error_text(err))
 	}
@@ -3456,6 +3451,7 @@ func apply_cli_overrides(settings, cli_args) {
 		"settings": settings,
 		"show_help": false,
 		"show_version": false,
+		"inspect_config": false,
 		"init_format": "",
 		"errors": []
 	}
@@ -3470,6 +3466,11 @@ func apply_cli_overrides(settings, cli_args) {
 
 		if token == "--help" || token == "-h" {
 			result["show_help"] = true
+			i := i + 1
+			continue
+		}
+		if token == "--inspect-config" {
+			result["inspect_config"] = true
 			i := i + 1
 			continue
 		}
@@ -5111,54 +5112,76 @@ func build_site(settings) {
 	])
 }
 
+func report_build_errors(errors, inspect_config) {
+	if inspect_config {
+		print(to_json({"schema_version": "kujo-ssg-config/v1", "ok": false, "errors": errors}))
+	} else {
+		print_errors(errors)
+	}
+}
+
 cli_args := args()
 settings := default_settings()
 config_result := load_config(settings)
 settings := config_result["settings"]
-
-if len(config_result["errors"]) > 0 {
-	print_errors(config_result["errors"])
-	exit(1)
-}
-
 cli_result := apply_cli_overrides(settings, cli_args)
 settings := cli_result["settings"]
-
+inspect_config := cli_result["inspect_config"]
+if !inspect_config {
+	print_lines([
+		"╔════════════════════════════════════════════════╗",
+		"║        Kujo Static Site Generator              ║",
+		"╚════════════════════════════════════════════════╝",
+		""
+	])
+	if len(config_result["loaded_path"]) > 0 {
+		print("Loaded configuration from " + config_result["loaded_path"])
+	}
+}
+if len(config_result["errors"]) > 0 {
+	report_build_errors(config_result["errors"], inspect_config)
+	exit(1)
+}
+if inspect_config && (cli_result["show_help"] || cli_result["show_version"] || len(cli_result["init_format"]) > 0) {
+	cli_result["errors"] = push(cli_result["errors"], "--inspect-config cannot be combined with --init, --help, or --version")
+}
 if len(cli_result["errors"]) > 0 {
-	print_errors(cli_result["errors"])
-	if cli_result["show_help"] {
+	report_build_errors(cli_result["errors"], inspect_config)
+	if cli_result["show_help"] && !inspect_config {
 		print("")
 		print_help()
 	}
 	exit(1)
 }
-
 if cli_result["show_help"] {
 	print_help()
 	exit(0)
 }
-
 if cli_result["show_version"] {
 	print("build.kujo " + VERSION)
 	exit(0)
 }
-
 init_format := trim(to_string(cli_result["init_format"]))
 if len(init_format) > 0 {
 	init_project(init_format)
 	exit(0)
 }
-
 normalize_result := normalize_settings(settings)
 settings := normalize_result["settings"]
-
 if len(normalize_result["errors"]) > 0 {
-	print_errors(normalize_result["errors"])
+	report_build_errors(normalize_result["errors"], inspect_config)
 	exit(1)
 }
-
+if inspect_config {
+	# Only expose the documented routing fields, never arbitrary config keys.
+	print(to_json({"schema_version": "kujo-ssg-config/v1", "ok": true, "settings": {
+		"content": settings["content"], "output": settings["output"],
+		"templates": settings["templates"], "assets": settings["assets"],
+		"site_url": settings["site_url"]
+	}}))
+	exit(0)
+}
 if settings["watch"] {
 	print("Warning: --watch is currently not implemented.")
 }
-
 build_site(settings)
