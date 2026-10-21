@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 — 2026-10-21
+
+- Update supported Node.js versions for parser-based minification and release tooling.
+- Preserve generated-output, WebMCP, docs starter and independently versioned Ability contracts.
+
 ## 1.2.0 - 2026-10-12
 
 ### Upgrade notes

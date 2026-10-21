@@ -1,6 +1,6 @@
 # SSG
 
-[![Version](https://img.shields.io/badge/version-1.2.0-black)](https://github.com/kujolang/ssg)
+[![Version](https://img.shields.io/badge/version-1.2.1-black)](https://github.com/kujolang/ssg)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
 
@@ -10,7 +10,12 @@ Local static-site generation showcase for Kujo projects, built around a single e
 
 It fits the Clarity / Context / Control story by keeping content models, routes, feeds, and validation predictable, surfacing generated artifacts and metadata as context, and making builds and release checks local and reviewable.
 
-## Release 1.2.0
+## Release 1.2.1
+
+SSG 1.2.1 updates the supported Node.js versions for build and test tooling.
+The 1.2.0 capabilities and independent Ability pack remain unchanged.
+
+### Included 1.2.0 capabilities
 
 [SSG 1.2.0](https://github.com/kujolang/ssg/releases/tag/v1.2.0) hardens filesystem,
 network, JSON-LD, and Ability boundaries; replaces unsafe text minification with
@@ -76,7 +81,7 @@ pages never receive write or deploy authority. See
 
 - Kujo CLI available on your `PATH`
 - esbuild 0.28.2 when minification is enabled (as in the bundled config);
-  install the pinned package using Node.js 18+ and `npm ci --ignore-scripts`,
+  install the pinned package using Node.js 22.23.4+, 24.22.1+, or 26.12.1+ on the supported branches and `npm ci --ignore-scripts`,
   or supply its native executable through `SSG_ESBUILD_BIN`
 - `cwebp` available on your `PATH` for size-optimized featured-image conversion
 
