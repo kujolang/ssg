@@ -26,7 +26,7 @@ Most daily work starts with the top-level `kujo` command.
 ```bash
 kujo run src/main.kujo
 kujo check src/main.kujo
-kujo run --interpreter src/main.kujo
+kujo run src/main.kujo
 ```
 
 ## Format, Lint, And Test

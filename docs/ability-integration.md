@@ -13,7 +13,7 @@ Install the dependency with Kennel, then run the offline pack contract:
 ```bash
 kennel validate
 kennel install
-kujo run tests/ability_pack_tests.kujo --interpreter
+kujo run tests/ability_pack_tests.kujo
 KUJO_BIN="$(command -v kujo)" bash scripts/test-ability-pack-integration.sh
 ```
 

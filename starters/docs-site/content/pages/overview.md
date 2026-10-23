@@ -26,7 +26,7 @@ kujo run app.kujo
 The interpreter remains available when you need a debugging or compatibility path:
 
 ```bash
-kujo run --interpreter app.kujo
+kujo run app.kujo
 ```
 
 ## Core Shape

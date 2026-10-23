@@ -28,7 +28,7 @@ commit = "be093e62bc93e5ec01e99e7da16c5657507ac820"
 
 [scripts]
 test = "bash scripts/run_ci_checks.sh"
-ability-test = "kujo run tests/ability_pack_tests.kujo --interpreter"
+ability-test = "kujo run tests/ability_pack_tests.kujo"
 
 [package.exports]
 build = "build.kujo"
