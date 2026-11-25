@@ -3107,57 +3107,55 @@ func parse_post_date(raw) {
 	}
 }
 
-func post_sort_before(a, b, sort_by) {
-	if sort_by == "title" {
-		return to_lower(a["title"]) < to_lower(b["title"])
+# Sort collection positions with the native string sort. Break ties by the
+# original discovery position so existing listing and llms.txt order is stable.
+func sort_collection_items(items, sort_by) {
+	descending := sort_by == "date"
+	count := len(items)
+	if count < 2 {
+		return items
 	}
-	if sort_by == "author" {
-		return to_lower(a["author"]) < to_lower(b["author"])
-	}
-	if sort_by == "order" {
-		return a["order"] < b["order"]
-	}
-	# Default date sort: newest first, by normalized numeric key.
-	return a["date_sort_key"] > b["date_sort_key"]
-}
-
-func sort_posts(posts, sort_by) {
-	sorted_posts := posts
-	n := len(sorted_posts)
-	i := 1
+	width := len(to_string(count))
+	nul := parse_json("\"\\u0000\"")
+	position_keys := []
+	i := 0
 	loop {
-		if i >= n {
+		if i >= count {
 			break
 		}
-
-		current := sorted_posts[i]
-		j := i
-		loop {
-			if j <= 0 {
-				break
-			}
-
-			prev := sorted_posts[j - 1]
-			if !post_sort_before(current, prev, sort_by) {
-				break
-			}
-
-			sorted_posts[j] = prev
-			j := j - 1
+		item := items[i]
+		position := i
+		key := ""
+		if descending {
+			key = numeric_sort_prefix(item["date_sort_key"])
+			position = count - 1 - i
+		} else if sort_by == "order" {
+			key = numeric_sort_prefix(item["order"])
+		} else {
+			# Escape embedded NULs. The terminator sorts before that escape,
+			# so a prefix title still sorts before any extension of itself.
+			key = replace(to_lower(item[sort_by]), nul, nul + "|")
 		}
-
-		sorted_posts[j] = current
+		position_keys = push(position_keys, key + nul + "!" + pad_number(position, width))
 		i := i + 1
 	}
-	return sorted_posts
+	ordered_keys := sort(position_keys)
+	if descending {
+		ordered_keys = reverse(ordered_keys)
+	}
+	sorted_items := []
+	for position_key in ordered_keys {
+		key_end := len(position_key)
+		index := to_int(substring(position_key, key_end - width, key_end))
+		if descending {
+			index = count - 1 - index
+		}
+		sorted_items = push(sorted_items, items[index])
+	}
+	return sorted_items
 }
 
-# --- Scale-friendly accumulation helpers -------------------------------------
-# Kujo arrays are copy-on-write, so `arr = push(arr, x)` in a hot loop is O(n^2)
-# and an in-language sort is O(n^3). For large sites we instead accumulate
-# records into a string (string concat is amortized O(n)), build the array in a
-# single `split` call, and sort once with the native O(n log n) `sort`.
-
+# Left-pad a nonnegative number for lexicographic sorting.
 func pad_number(value, width) {
 	s := to_string(value)
 	loop {
@@ -3187,6 +3185,15 @@ func invert_decimal_digits(value) {
 	return inverted
 }
 
+func numeric_sort_prefix(value) {
+	if value < 0 {
+		magnitude := substring(to_string(value), 1, len(to_string(value)))
+		return "0" + pad_number(20 - len(magnitude), 2) + invert_decimal_digits(magnitude)
+	}
+	digits := to_string(value)
+	return "1" + pad_number(len(digits), 2) + digits
+}
+
 # Lexicographic sort prefix so a single native string sort yields the requested
 # order. Date is descending (newest first); title/author ascending; order asc.
 func post_sort_prefix(sort_by, date_sort_key, title, author, order) {
@@ -3197,12 +3204,7 @@ func post_sort_prefix(sort_by, date_sort_key, title, author, order) {
 		return regex_replace(to_lower(author), "[\\t\\r\\n]+", " ")
 	}
 	if sort_by == "order" {
-		if order < 0 {
-			magnitude := substring(to_string(order), 1, len(to_string(order)))
-			return "0" + pad_number(20 - len(magnitude), 2) + invert_decimal_digits(magnitude)
-		}
-		digits := to_string(order)
-		return "1" + pad_number(len(digits), 2) + digits
+		return numeric_sort_prefix(order)
 	}
 	return pad_number(99999999 - date_sort_key, 8)
 }
@@ -4711,7 +4713,7 @@ func build_site(settings) {
 			continue
 		}
 
-		sorted_collection_items := sort_posts(collection_items, settings["sort_by"])
+		sorted_collection_items := sort_collection_items(collection_items, settings["sort_by"])
 		collection_cards := ""
 		preview_cards := ""
 		location_cards := ""

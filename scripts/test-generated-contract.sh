@@ -297,10 +297,14 @@ excerpt: Newest excerpt
 
 # Newest Anchor
 EOF
+	cp -R content-sort-date/posts content-sort-date/projects
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --content content-sort-date --output output-sort-date --posts-per-page 20 --site-url https://example.com --sort-by date
 	assert_output_contains "Build complete"
 	assert_substring_order output-sort-date/blog/index.html 'Newest Anchor' 'Tie First'
 	assert_substring_order output-sort-date/blog/index.html 'Tie First' 'Tie Second'
+	assert_substring_order output-sort-date/llms.txt '/projects/z-newest-anchor/' '/projects/b-tie-second/'
+	assert_substring_order output-sort-date/projects/index.html 'projects/a-tie-first/' 'projects/b-tie-second/'
+	assert_substring_order output-sort-date/projects/index.html 'projects/z-newest-anchor/' 'projects/a-tie-first/'
 
 	setup_sort_content content-sort-title
 	cat > content-sort-title/posts/a-title-tie-first.md <<'EOF'
@@ -317,7 +321,7 @@ excerpt: Title tie first excerpt
 EOF
 	cat > content-sort-title/posts/b-title-tie-second.md <<'EOF'
 ---
-title: Same Title
+title: same title
 date: 2026-05-10
 author: 1
 categories: [1]
@@ -339,10 +343,14 @@ excerpt: Title anchor excerpt
 
 # Aardvark Title
 EOF
+	cp -R content-sort-title/posts content-sort-title/projects
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --content content-sort-title --output output-sort-title --posts-per-page 20 --site-url https://example.com --sort-by title
 	assert_output_contains "Build complete"
 	assert_substring_order output-sort-title/blog/index.html 'Aardvark Title' 'Title tie first excerpt'
 	assert_substring_order output-sort-title/blog/index.html 'Title tie first excerpt' 'Title tie second excerpt'
+	assert_substring_order output-sort-title/llms.txt '/projects/z-title-anchor/' '/projects/b-title-tie-second/'
+	assert_substring_order output-sort-title/projects/index.html 'projects/a-title-tie-first/' 'projects/b-title-tie-second/'
+	assert_substring_order output-sort-title/projects/index.html 'projects/z-title-anchor/' 'projects/a-title-tie-first/'
 
 	setup_sort_content content-sort-author
 	cat > content-sort-author/posts/a-author-tie-first.md <<'EOF'
@@ -381,10 +389,14 @@ excerpt: Author anchor excerpt
 
 # Author Anchor
 EOF
+	cp -R content-sort-author/posts content-sort-author/projects
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --content content-sort-author --output output-sort-author --posts-per-page 20 --site-url https://example.com --sort-by author
 	assert_output_contains "Build complete"
 	assert_substring_order output-sort-author/blog/index.html 'Author Anchor' 'Author Tie First'
 	assert_substring_order output-sort-author/blog/index.html 'Author Tie First' 'Author Tie Second'
+	assert_substring_order output-sort-author/llms.txt '/projects/z-author-anchor/' '/projects/b-author-tie-second/'
+	assert_substring_order output-sort-author/projects/index.html 'projects/a-author-tie-first/' 'projects/b-author-tie-second/'
+	assert_substring_order output-sort-author/projects/index.html 'projects/z-author-anchor/' 'projects/a-author-tie-first/'
 
 	setup_sort_content content-sort-order
 	cat > content-sort-order/posts/a-order-tie-first.md <<'EOF'
@@ -420,7 +432,7 @@ date: 2026-05-10
 author: 1
 categories: [1]
 tags: [1]
-order: 1
+order: -20
 excerpt: Order anchor excerpt
 ---
 
@@ -438,11 +450,16 @@ excerpt: Order missing excerpt
 
 # Order Missing
 EOF
+	cp -R content-sort-order/posts content-sort-order/projects
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --content content-sort-order --output output-sort-order --posts-per-page 20 --site-url https://example.com --sort-by order
 	assert_output_contains "Build complete"
 	assert_substring_order output-sort-order/blog/index.html 'Order Anchor' 'Order Tie First'
 	assert_substring_order output-sort-order/blog/index.html 'Order Tie First' 'Order Tie Second'
 	assert_substring_order output-sort-order/blog/index.html 'Order Tie Second' 'Order Missing'
+	assert_substring_order output-sort-order/llms.txt '/projects/z-order-anchor/' '/projects/zz-order-missing/'
+	assert_substring_order output-sort-order/projects/index.html 'projects/b-order-tie-second/' 'projects/zz-order-missing/'
+	assert_substring_order output-sort-order/projects/index.html 'projects/a-order-tie-first/' 'projects/b-order-tie-second/'
+	assert_substring_order output-sort-order/projects/index.html 'projects/z-order-anchor/' 'projects/a-order-tie-first/'
 
 	popd >/dev/null
 	echo "Generated output contract tests passed"
