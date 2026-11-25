@@ -1,5 +1,8 @@
 # Kujo SSG — Large-Site Performance Findings
 
+The [November 2026 build performance report](audits/build-performance-20261125.md)
+measures faster frontmatter extraction and custom collection sorting on Kujo 1.10.0.
+
 **Date:** 2026-06-18
 **Context:** Goal was to beat the reference SSG's build speed.
 
