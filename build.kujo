@@ -689,27 +689,8 @@ func parse_frontmatter(content, source_file) {
 		if !has_closing_delimiter {
 			print("Warning: Unclosed frontmatter delimiter in " + source_file + " (line 1).")
 		} else {
-			frontmatter_lines := []
-			idx := 1
-			loop {
-				if idx >= closing_line {
-					break
-				}
-				frontmatter_lines = push(frontmatter_lines, lines[idx])
-				idx := idx + 1
-			}
-			body_lines := []
-			idx := closing_line + 1
-			loop {
-				if idx >= len(lines) {
-					break
-				}
-				body_lines = push(body_lines, lines[idx])
-				idx := idx + 1
-			}
-
-			frontmatter_text := trim(join(frontmatter_lines, "\n"))
-			body := trim(join(body_lines, "\n"))
+			frontmatter_text := trim(join(slice(lines, 1, closing_line), "\n"))
+			body := trim(join(slice(lines, closing_line + 1, len(lines)), "\n"))
 			if len(frontmatter_text) > 0 {
 				try {
 					parsed := parse_yaml(frontmatter_text)

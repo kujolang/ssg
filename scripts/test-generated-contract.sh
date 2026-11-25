@@ -75,6 +75,11 @@ description: "A quoted --- delimiter stays in frontmatter."
 This body keeps a literal --- sequence intact.
 EOF
 
+	# Delimiter trimming must preserve CRLF, Unicode, and an unterminated last
+	# body line. An empty frontmatter block may also end at EOF.
+	printf ' \t---\r\ntitle: Café 世界\r\n--- \t\r\n\r\nTail with --- and 世界' > content/pages/frontmatter-crlf.md
+	printf '%s\n%s' '---' '---' > content/pages/empty-frontmatter.md
+
 	cp assets/images/post-welcome-kujo-ssg.jpg escape-featured-image.jpg
 	cat > content/pages/escaped-featured-image.md <<'EOF'
 ---
@@ -198,6 +203,13 @@ EOF
 	assert_file_contains output/frontmatter-delimiter-proof/index.html '<meta name="description" content="A quoted --- delimiter stays in frontmatter.">'
 	assert_file_contains output/frontmatter-delimiter-proof/index.html 'Delimiter-safe body'
 	assert_file_contains output/frontmatter-delimiter-proof/index.html 'literal --- sequence intact'
+	assert_file_contains output/frontmatter-crlf/index.html '<title>Café 世界 | Kujo SSG Starter Site</title>'
+	assert_file_contains output/frontmatter-crlf/index.html 'Tail with --- and 世界'
+	assert_path_exists output/empty-frontmatter/index.html
+	if printf '%s\n' "$LAST_OUTPUT" | grep -Fq 'Unclosed frontmatter delimiter in content/pages/empty-frontmatter.md'; then
+		echo 'Empty frontmatter ending at EOF triggered a missing delimiter warning'
+		exit 1
+	fi
 	assert_file_not_contains output/escaped-featured-image/index.html 'escape-featured-image'
 	assert_output_contains "Warning: Rejected featured_image '../../escape-featured-image.jpg' in content/pages/escaped-featured-image.md"
 	assert_output_contains 'Warning: Unclosed frontmatter delimiter in content/pages/malformed-frontmatter.md (line 1).'
