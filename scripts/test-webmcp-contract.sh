@@ -123,8 +123,12 @@ assert_file_contains enabled/about/index.html 'data-kujo-site-index="../.well-kn
 assert_file_contains enabled/services/roof/index.html 'data-kujo-site-index="../../.well-known/kujo-site-index.json"'
 assert_file_not_contains enabled/404.html 'data-kujo-webmcp'
 [[ "$(grep -o 'data-kujo-webmcp' enabled/about/index.html | wc -l | tr -d ' ')" == "1" ]]
-[[ "$(wc -c < enabled/assets/js/kujo-webmcp.js | tr -d ' ')" -lt 12288 ]]
-[[ "$(wc -c < enabled/assets/js/kujo-webmcp.min.js | tr -d ' ')" -lt 6144 ]]
+runtime_bytes=$(wc -c < enabled/assets/js/kujo-webmcp.js)
+minified_bytes=$(wc -c < enabled/assets/js/kujo-webmcp.min.js)
+if (( runtime_bytes >= 12288 || minified_bytes >= 6144 )); then
+	echo "FAIL WebMCP runtime exceeds transfer budget: $runtime_bytes bytes raw, $minified_bytes bytes minified" >&2
+	exit 1
+fi
 
 cat > kujo-ssg.yml <<'EOF'
 webmcp: true

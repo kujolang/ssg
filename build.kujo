@@ -2170,8 +2170,24 @@ func json_escape(value) {
 
 func webmcp_runtime_source() {
 	return join([
-		"(()=>{'use strict';const m=document.modelContext,s=document.currentScript;if(!m||typeof m.registerTool!=='function'||!s)return;const u=new URL(s.dataset.kujoSiteIndex||'',document.baseURI);if(u.origin!==location.origin)return;let p;const E=x=>{throw Error('Kujo WebMCP: '+x)},O=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{},N=x=>String(x).trim().toLocaleLowerCase(),C=(x,n)=>{x=String(x||'').replace(/\\s+/g,' ').trim();return x.length>n?x.slice(0,n):x},K=(x,a)=>{for(const k of Object.keys(x))if(!a.includes(k))E('unknown argument '+k)},L=x=>{if(x===undefined)return 5;if(!Number.isInteger(x)||x<1||x>10)E('limit must be 1 to 10');return x},S=c=>c&&c.signal instanceof AbortSignal?c.signal:undefined;",
-		"const D=a=>{if(!a||a.schema!=='kujo-ssg-site-index/v1'||!a.site||!Array.isArray(a.navigation)||!Array.isArray(a.content_types)||!Array.isArray(a.items))E('unsupported or malformed site index');return a},F=q=>{if(!p)p=fetch(u.href,{headers:{Accept:'application/json'},credentials:'same-origin',signal:q}).then(r=>{if(!r.ok)E('site index request failed');return r.json()}).then(D).catch(e=>{p=0;throw e});return p},T=(a,t)=>a.content_types.some(x=>x.name===t),A=i=>{const a=[];for(const n of Object.keys(i.taxonomies||{}).sort())for(const t of i.taxonomies[n]||[])a.push(String(t));return a},R=i=>({id:i.id,type:i.type,title:i.title,description:C(i.description,120),url:i.url});",
+		"(()=>{'use strict';const m=document.modelContext,s=document.currentScript;if(!m||typeof m.registerTool!=='function'||!s)return;const u=new URL(s.dataset.kujoSiteIndex||'',document.baseURI);if(u.origin!==location.origin)return;let p,session;const E=x=>{throw Error('Kujo WebMCP: '+x)},O=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{},N=x=>String(x).trim().toLocaleLowerCase(),C=(x,n)=>{x=String(x||'').replace(/\\s+/g,' ').trim();return x.length>n?x.slice(0,n):x},K=(x,a)=>{for(const k of Object.keys(x))if(!a.includes(k))E('unknown argument '+k)},L=x=>{if(x===undefined)return 5;if(!Number.isInteger(x)||x<1||x>10)E('limit must be 1 to 10');return x},S=c=>c&&c.signal instanceof AbortSignal?c.signal:undefined;",
+		"const D=a=>{if(!a||a.schema!=='kujo-ssg-site-index/v1'||!a.site||!Array.isArray(a.navigation)||!Array.isArray(a.content_types)||!Array.isArray(a.items))E('unsupported or malformed site index');return a},T=(a,t)=>a.content_types.some(x=>x.name===t),A=i=>{const a=[];for(const n of Object.keys(i.taxonomies||{}).sort())for(const t of i.taxonomies[n]||[])a.push(String(t));return a},R=i=>({id:i.id,type:i.type,title:i.title,description:C(i.description,120),url:i.url});",
+		"function F(signal){",
+		"  signal?.throwIfAborted();",
+		"  session.signal.throwIfAborted();",
+		"  if(!p){",
+		"    const pending=fetch(u.href,{headers:{Accept:'application/json'},mode:'same-origin',credentials:'same-origin',signal:session.signal}).then(r=>{if(!r.ok)E('site index request failed');return r.json()}).then(D);",
+		"    p=pending;",
+		"    pending.catch(()=>{if(p===pending)p=undefined});",
+		"  }",
+		"  if(!signal)return p;",
+		"  return new Promise((resolve,reject)=>{",
+		"    const abort=()=>reject(signal.reason);",
+		"    const finish=(settle,value)=>{signal.removeEventListener('abort',abort);settle(value)};",
+		"    signal.addEventListener('abort',abort,{once:true});",
+		"    p.then(value=>finish(resolve,value),error=>finish(reject,error));",
+		"  });",
+		"}",
 		"const Q=(a,t,v)=>{if(v===undefined)return{};if(!v||typeof v!=='object'||Array.isArray(v))E('taxonomy must be an object');const n=Object.keys(v),z=a.content_types.find(x=>x.name===t),w=z?z.taxonomies:[];if(n.length>3)E('too many taxonomies');for(const k of n)if(!w.includes(k)||!Array.isArray(v[k])||v[k].length<1||v[k].length>5||v[k].some(x=>typeof x!=='string'||!N(x)))E('invalid taxonomy filter');return v},M=(i,f)=>{for(const k of Object.keys(f)){const a=(i.taxonomies&&i.taxonomies[k]||[]).map(N);if(!f[k].some(x=>a.includes(N(x))))return false}return true};",
 		"async function I(x,c){x=O(x);K(x,[]);const a=await F(S(c));return{schema:a.schema,site:a.site,navigation:a.navigation.slice(0,25),content_types:a.content_types.slice(0,25)}}",
 		"async function H(x,c){x=O(x);K(x,['query','limit','content_type']);if(typeof x.query!=='string'||x.query.trim().length<1||x.query.trim().length>200)E('query must contain 1 to 200 characters');const l=L(x.limit),a=await F(S(c)),q=N(x.query);if(x.content_type!==undefined&&!T(a,x.content_type))E('unknown content_type');const z=[];for(const i of a.items){if(!i.searchable||x.content_type&&i.type!==x.content_type)continue;const t=N(i.title),d=N(i.description),b=N(i.summary),h=A(i).filter(y=>N(y).includes(q));let r=t===q?100:t.startsWith(q)?80:t.includes(q)?60:h.length?40:d.includes(q)?25:b.includes(q)?10:0;if(r)z.push({i,r,h})}z.sort((a,b)=>b.r-a.r||String(a.i.url).localeCompare(String(b.i.url))||String(a.i.id).localeCompare(String(b.i.id)));const y=z.slice(0,l).map(x=>{const a=R(x.i);a.score=x.r;if(x.h.length)a.matched_taxonomies=x.h.slice(0,5);return a});return{query:C(x.query,200),results:y,returned_count:y.length,has_more:z.length>y.length}}",
@@ -2181,7 +2197,15 @@ func webmcp_runtime_source() {
 		"{name:'get_site_info',description:'Describe this public static site, its navigation, and available content collections.',inputSchema:{...e,properties:{}},execute:I,annotations:a},",
 		"{name:'search_site',description:'Search concise public site records. Use a returned ID or URL with get_content.',inputSchema:{...e,properties:{query:{type:'string',minLength:1,maxLength:200},limit:{type:'integer',minimum:1,maximum:10},content_type:{type:'string',minLength:1,maxLength:64}},required:['query']},execute:H,annotations:a},",
 		"{name:'list_content',description:'List public records from one discovered type, optionally filtered by taxonomy labels.',inputSchema:{...e,properties:{type:{type:'string',minLength:1,maxLength:64},taxonomy:{type:'object',maxProperties:3,additionalProperties:{type:'array',minItems:1,maxItems:5,items:{type:'string',minLength:1,maxLength:128}}},limit:{type:'integer',minimum:1,maximum:10}},required:['type']},execute:B,annotations:a},",
-		"{name:'get_content',description:'Retrieve one known public record by exact Kujo ID or same-origin URL. Returns no HTML.',inputSchema:{...e,properties:{id:{type:'string',minLength:1,maxLength:256},url:{type:'string',minLength:1,maxLength:2048}},oneOf:[{required:['id']},{required:['url']}]},execute:G,annotations:a}],r=new AbortController;addEventListener('pagehide',()=>r.abort(),{once:true});Promise.all(t.map(x=>m.registerTool(x,{signal:r.signal}))).catch(()=>{})})();",
+		"{name:'get_content',description:'Retrieve one known public record by exact Kujo ID or same-origin URL. Returns no HTML.',inputSchema:{...e,properties:{id:{type:'string',minLength:1,maxLength:256},url:{type:'string',minLength:1,maxLength:2048}},oneOf:[{required:['id']},{required:['url']}]},execute:G,annotations:a}];",
+		"function register(){",
+		"  session=new AbortController();",
+		"  const {signal}=session;",
+		"  Promise.all(t.map(async tool=>m.registerTool(tool,{signal}))).catch(()=>{});",
+		"}",
+		"addEventListener('pagehide',()=>{session.abort();p=undefined});",
+		"addEventListener('pageshow',event=>{if(event.persisted)register()});",
+		"register()})();",
 		""
 	], "\n")
 }
@@ -2524,7 +2548,7 @@ func resolve_minifier() {
 	return command
 }
 
-func minify_assets_recursive(path, command) {
+func minify_assets_recursive(path, command, webmcp_runtime_path) {
 	if !path_exists(path) { return null }
 	if path_is_symlink(path) {
 		print("Error: refusing to minify symlink: " + path)
@@ -2532,7 +2556,7 @@ func minify_assets_recursive(path, command) {
 	}
 	if path_is_dir(path) {
 		for entry in list_dir(path) {
-			minify_assets_recursive(path_join(path, entry), command)
+			minify_assets_recursive(path_join(path, entry), command, webmcp_runtime_path)
 		}
 		return null
 	}
@@ -2546,10 +2570,13 @@ func minify_assets_recursive(path, command) {
 			print("Error: minified destination already exists: " + destination)
 			exit(1)
 		}
-		# Parse and print without bundling, identifier renaming, syntax rewrites,
-		# or dropping legal comments. Absolute input paths cannot become flags.
+		# Preserve names and syntax in site-owned assets. The self-contained
+		# generated adapter can use full minification to meet its transfer budget.
+		mode := "--minify-whitespace"
+		if path == webmcp_runtime_path { mode = "--minify" }
+		# Absolute input paths cannot become flags.
 		minify_command := command
-		for argument in [path_absolute(path), "--minify-whitespace", "--platform=neutral", "--legal-comments=inline", "--charset=utf8", "--log-level=warning", "--outfile=" + absolute_config_path(destination)] {
+		for argument in [path_absolute(path), mode, "--platform=neutral", "--legal-comments=inline", "--charset=utf8", "--log-level=warning", "--outfile=" + absolute_config_path(destination)] {
 			minify_command = push(minify_command, argument)
 		}
 		result := spawn_process(minify_command, {"timeout_ms": 300000, "max_output_bytes": 1048576})
@@ -5112,7 +5139,9 @@ func build_site(settings) {
 	}
 
 	if settings["minify"] {
-		minify_assets_recursive(path_join(output_dir, "assets"), minifier)
+		webmcp_runtime_path := ""
+		if settings["webmcp"] { webmcp_runtime_path = path_join(output_dir, "assets/js/kujo-webmcp.js") }
+		minify_assets_recursive(path_join(output_dir, "assets"), minifier, webmcp_runtime_path)
 	}
 
 	total_time := (performance_now() - build_start) / 1000.0

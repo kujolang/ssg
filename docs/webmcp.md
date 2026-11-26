@@ -144,9 +144,13 @@ enabled build.
 
 Website text is untrusted content. It is serialized only as JSON result data
 and never interpolated into JavaScript, tool instructions, descriptions, or
-schemas. The runtime makes one same-origin fetch on first tool use, caches the
-validated index in memory, honors current execution/registration abort signals,
-and makes no cross-origin request, DOM mutation, storage write, or server call.
+schemas. The runtime makes one same-origin fetch on first tool use and caches
+the validated index in memory. Cancelling one tool call stops that caller's wait
+while other calls continue to share the fetch. Leaving the page cancels any
+pending fetch and unregisters the tools. Returning from the browser's back/forward
+cache registers the tools again and loads the index on demand. The fetch uses
+same-origin mode to enforce the boundary across redirects. The runtime makes
+no DOM mutation or storage write.
 
 ## Relationship to Kujo Ability
 
@@ -190,6 +194,12 @@ The index has a stable URL. Configure it for revalidation (`Cache-Control:
 no-cache`) or a short cache lifetime so deploys are observed promptly; the SSG
 cannot set host headers. The runtime may use a longer cache lifetime when the
 HTML deployment invalidates assets consistently.
+
+With minification enabled, SSG fully minifies the self-contained generated
+adapter. Site-owned assets retain whitespace-only minification. The release
+gate checks the adapter stays under 6 KiB minified and 12 KiB unminified.
+For intentional growth, record the new byte counts and update the documented
+and tested limits together.
 
 V1 intentionally uses one compact index. Measurements through 10,000 records
 remain reasonable with lazy loading; raw parse memory, not transfer size, is the

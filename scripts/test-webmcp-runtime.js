@@ -12,10 +12,11 @@ if (!runtimePath || !indexPath) throw new Error('usage: test-webmcp-runtime.js <
 const source = fs.readFileSync(runtimePath, 'utf8');
 const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
 
-async function load(data, supported = true) {
+async function load(data, supported = true, waitForResponse = async () => {}) {
 	const tools = [];
 	let fetches = 0;
-	let registrationSignal;
+	const registrationSignals = [];
+	const listeners = new Map();
 	const context = {
 		AbortController,
 		AbortSignal,
@@ -28,9 +29,11 @@ async function load(data, supported = true) {
 		Number,
 		JSON,
 		location: {origin: 'https://example.test', href: 'https://example.test/docs/'},
-		addEventListener() {},
+		addEventListener(name, handler) { listeners.set(name, handler); },
 		fetch: async (_url, options) => {
+			assert.equal(options.mode, 'same-origin');
 			fetches += 1;
+			await waitForResponse();
 			if (options.signal?.aborted) throw options.signal.reason;
 			return {ok: true, json: async () => data};
 		},
@@ -38,7 +41,7 @@ async function load(data, supported = true) {
 			modelContext: supported ? {
 				registerTool: async (tool, options) => {
 					tools.push(tool);
-					registrationSignal = options.signal;
+					registrationSignals.push(options.signal);
 				}
 			} : undefined,
 			currentScript: {dataset: {kujoSiteIndex: '.well-known/kujo-site-index.json'}},
@@ -47,7 +50,8 @@ async function load(data, supported = true) {
 	};
 	vm.runInNewContext(source, context, {filename: runtimePath});
 	await new Promise(resolve => setImmediate(resolve));
-	return {tools, fetches: () => fetches, registrationSignal};
+	return {tools, fetches: () => fetches, registrationSignals,
+		emit: (name, event) => listeners.get(name)?.(event)};
 }
 
 (async () => {
@@ -59,7 +63,7 @@ async function load(data, supported = true) {
 	assert.deepEqual(loaded.tools.map(tool => tool.name), [
 		'get_site_info', 'search_site', 'list_content', 'get_content'
 	]);
-	assert.ok(loaded.registrationSignal instanceof AbortSignal);
+	assert.ok(loaded.registrationSignals[0] instanceof AbortSignal);
 	for (const tool of loaded.tools) {
 		assert.equal(tool.annotations.readOnlyHint, true);
 		assert.equal(tool.annotations.untrustedContentHint, true);
@@ -110,10 +114,47 @@ async function load(data, supported = true) {
 
 	const malformed = await load({...index, schema: 'unsupported/v9'});
 	await assert.rejects(() => malformed.tools[0].execute({}), /unsupported or malformed/);
-	const cancelled = await load(index);
 	const controller = new AbortController();
+	let releaseFetch;
+	const fetchGate = new Promise(resolve => { releaseFetch = resolve; });
+	const shared = await load(index, true, () => fetchGate);
+	const firstCall = assert.rejects(shared.tools[0].execute({}, {signal: controller.signal}), /Abort/);
+	const concurrentCall = shared.tools[0].execute({});
 	controller.abort();
+	releaseFetch();
+	assert.equal((await concurrentCall).schema, 'kujo-ssg-site-index/v1');
+	await firstCall;
+	assert.equal(shared.fetches(), 1);
+	await assert.rejects(shared.tools[0].execute({}, {signal: controller.signal}), /Abort/);
+
+	const cancelled = await load(index);
 	await assert.rejects(() => cancelled.tools[0].execute({}, {signal: controller.signal}), /Abort/);
+	assert.equal(cancelled.fetches(), 0, 'a cancelled call should not start a fetch');
+
+	const originalRegistration = shared.registrationSignals[0];
+	shared.emit('pagehide');
+	assert.equal(originalRegistration.aborted, true);
+	shared.emit('pageshow', {persisted: true});
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(shared.tools.length, 8, 'restored pages should register the tools again');
+	assert.notEqual(shared.registrationSignals[4], originalRegistration);
+	assert.equal(shared.registrationSignals[4].aborted, false);
+	assert.equal((await shared.tools[4].execute({})).schema, 'kujo-ssg-site-index/v1');
+	assert.equal(shared.fetches(), 2);
+
+	let resolveOldFetch;
+	let requestCount = 0;
+	const oldFetch = new Promise(resolve => { resolveOldFetch = resolve; });
+	const restored = await load(index, true, () => ++requestCount === 1 ? oldFetch : undefined);
+	const leavingCall = assert.rejects(restored.tools[0].execute({}), /Abort/);
+	restored.emit('pagehide');
+	restored.emit('pageshow', {persisted: true});
+	await new Promise(resolve => setImmediate(resolve));
+	await restored.tools[4].execute({});
+	resolveOldFetch();
+	await leavingCall;
+	await restored.tools[4].execute({});
+	assert.equal(restored.fetches(), 2, 'a previous document lifetime must not evict the current index');
 
 	console.log('WebMCP runtime unit tests passed');
 })().catch(error => {
