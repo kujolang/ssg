@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -15,12 +18,15 @@ jobs:
           node-version: "24.22.1"
       - name: Checkout kujo-ssg
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Checkout Kujo runtime
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: kujolang/kujo
           path: kujo-runtime
+          persist-credentials: false
 
       - name: Checkout canonical Ability runtime
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -28,9 +34,12 @@ jobs:
           repository: kujolang/ability
           ref: be093e62bc93e5ec01e99e7da16c5657507ac820
           path: kennel_packages/ability
+          persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
+        with:
+          toolchain: stable
 
       - name: Install WebP encoder
         run: sudo apt-get update && sudo apt-get install -y webp
