@@ -216,7 +216,10 @@ class Parallel(unittest.TestCase):
                 self.assertEqual(result.returncode, 2)
                 self.assertFalse(log.exists())
             result = subprocess.run(
-                ["bash", wrapper, "4", "2"], env=env, capture_output=True, text=True
+                ["bash", wrapper, "4", "2"],
+                env=dict(env, TMPDIR=str(root / "missing-temp-directory")),
+                capture_output=True,
+                text=True,
             )
             self.assertEqual(result.returncode, 1)
             calls = log.read_text().splitlines()

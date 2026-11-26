@@ -95,27 +95,20 @@ echo "[1/3] setup"
 t_setup=$(date +%s.%N)
 
 echo "[2/3] rendering posts: $SHARDS shards, $CONCURRENCY at a time"
-fail_flag="$(mktemp)"
+failed_shards=""
 active_pids=""
-cleanup_fail_flag() {
-    rm -f -- "$fail_flag"
-}
 cleanup_workers() {
     local worker pid
     for worker in $active_pids; do
         pid="${worker%%:*}"
         kill "$pid" 2>/dev/null || true
     done
-    wait 2>/dev/null || true
-    active_pids=""
+    for worker in $active_pids; do
+        wait "${worker%%:*}" 2>/dev/null || true
+    done
 }
-handle_signal() {
-    cleanup_workers
-    cleanup_fail_flag
-    exit 130
-}
-trap cleanup_fail_flag EXIT
-trap handle_signal INT TERM
+trap cleanup_workers EXIT
+trap 'exit 130' INT TERM
 # Bounded parallelism in fixed-size batches. This avoids `wait -n`, which is
 # unavailable on the bash 3.2 that ships with macOS (where the fallback `wait`
 # serialized every shard after the first batch). Each batch launches up to
@@ -135,24 +128,24 @@ while [ "$i" -lt "$SHARDS" ]; do
         pid="${worker%%:*}"
         shard="${worker##*:}"
         if ! wait "$pid"; then
-            echo "shard $shard failed" >>"$fail_flag"
+            failed_shards+="shard $shard failed"$'\n'
         fi
+        active_pids="${active_pids# "$worker"}"
     done
     active_pids=""
     i="$batch_end"
     # A failed batch cannot produce a complete site. Reap its workers, then
     # stop before starting more shards; preserve every failure diagnostic.
-    if [ -s "$fail_flag" ]; then
+    if [ -n "$failed_shards" ]; then
         break
     fi
 done
 
-if [ -s "$fail_flag" ]; then
+if [ -n "$failed_shards" ]; then
     echo "A posts shard failed:" >&2
-    cat "$fail_flag" >&2
+    printf '%s' "$failed_shards" >&2
     exit 1
 fi
-cleanup_fail_flag
 trap - EXIT INT TERM
 t_render=$(date +%s.%N)
 

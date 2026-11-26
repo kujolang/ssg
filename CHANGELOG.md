@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Keep the shared WebMCP index fetch available to concurrent tool calls when one caller cancels. Restore tool registration when returning from the browser's back/forward cache.
+- Reap parallel build workers on early exit and report failed shards without writing temporary status files.
+
 ## 1.2.1 — 2026-10-21
 
 - Update supported Node.js versions for parser-based minification and release tooling.
