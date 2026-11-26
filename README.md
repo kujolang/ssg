@@ -255,10 +255,14 @@ Markdown destination follows the configured content root (`<content>/reference`)
 Conversion-only `--skip-build` and `--dry-run` keep the `content/reference` default
 and do not require a builder configuration. Explicit `--content-out` is preserved.
 
-The bridge only deletes files listed in
-`<content-out>/.docgen-ssg-manifest.json`, and it refuses content, DocGen output,
-or cache paths that escape the SSG root. Both rendering backends reject symlinked
-generated files and manifest descendants before modifying content. `--dry-run`
+The bridge deletes stale Markdown only when it appears in
+`<content-out>/.docgen-ssg-manifest.json` and its frontmatter contains
+`docgen_generated: true`. Both rendering backends check ownership and reject
+symbolic links before any cleanup or overwrite. If a handwritten page shares a
+generated filename, choose a dedicated `--content-out` directory. The reusable
+docs starter uses `content/reference/generated` for this purpose. Generated
+content, DocGen output, and cache destinations must stay under the SSG root and
+outside Git metadata. `--dry-run`
 requires an existing `--docgen-payload` and never starts DocGen, builds the site,
 or runs validation; it checks and renders the supplied artifacts in memory.
 

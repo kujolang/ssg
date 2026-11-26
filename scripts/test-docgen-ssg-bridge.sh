@@ -150,6 +150,37 @@ JSON
 JSON
 }
 
+check_generated_ownership() {
+	local site="$1"
+	local reference="$site/content/reference"
+	local manifest="$reference/.docgen-ssg-manifest.json"
+	local -a bridge=("$KUJO_BIN" run "$REPO_ROOT/scripts/docgen_ssg_bridge.kujo" --
+		--ssg-root "$site" --docgen-payload "$site/payload.json"
+		--content-out content/reference --max-undocumented 1 --skip-build --skip-validation)
+	printf '%s\n' '---' 'docgen_generated: true' '---' 'Stale reference' > "$reference/stale.md"
+	printf '%s\n' '---' 'title: Handwritten' '---' 'docgen_generated: true' > "$reference/handwritten.md"
+	printf '%s\n' '{"schema_version":"docgen-ssg-manifest/v1","files":["stale.md","handwritten.md"]}' > "$manifest"
+	run_expect_failure "${bridge[@]}"
+	assert_output_contains 'refusing to modify Markdown without DocGen ownership: handwritten.md'
+	assert_file_contains "$reference/handwritten.md" 'title: Handwritten'
+	assert_path_exists "$reference/stale.md"
+	assert_file_contains "$manifest" 'handwritten.md'
+
+	printf '%s\n' '{"schema_version":"docgen-ssg-manifest/v1","files":["stale.md"]}' > "$manifest"
+	mv "$reference/api-reference.md" "$site/generated-reference.md"
+	printf '%s\n' 'Handwritten reference' > "$reference/api-reference.md"
+	run_expect_failure "${bridge[@]}"
+	assert_output_contains 'refusing to modify Markdown without DocGen ownership: api-reference.md'
+	assert_file_contains "$reference/api-reference.md" 'Handwritten reference'
+	assert_path_exists "$reference/stale.md"
+
+	mv -f "$site/generated-reference.md" "$reference/api-reference.md"
+	run_expect_success "${bridge[@]}"
+	assert_path_missing "$reference/stale.md"
+	assert_file_contains "$reference/api-reference.md" 'docgen_generated: true'
+	assert_file_contains "$reference/handwritten.md" 'title: Handwritten'
+}
+
 main() {
 	local temp_dir
 	temp_dir="$(mktemp -d)"
@@ -194,6 +225,7 @@ main() {
 		--skip-build \
 		--skip-validation
 	assert_file_contains "$temp_dir/content/reference/api-reference.md" 'docgen_symbol_count: 2'
+	check_generated_ownership "$temp_dir"
 
 	python3 - "$temp_dir/project.json" "$temp_dir/gaps.json" <<'PY'
 import json
@@ -238,21 +270,7 @@ PY
 		exit 1
 	fi
 
-	echo "stale" > "$temp_dir/content/reference/stale.md"
-	cat > "$temp_dir/content/reference/.docgen-ssg-manifest.json" <<'JSON'
-{
-  "schema_version": "docgen-ssg-manifest/v1",
-  "files": ["stale.md"]
-}
-JSON
-	run_expect_success "$KUJO_BIN" run "$REPO_ROOT/scripts/docgen_ssg_bridge.kujo" -- \
-		--ssg-root "$temp_dir" \
-		--docgen-payload "$temp_dir/payload.json" \
-		--content-out content/reference \
-		--max-undocumented 1 \
-		--skip-build \
-		--skip-validation
-	assert_path_missing "$temp_dir/content/reference/stale.md"
+	check_generated_ownership "$temp_dir"
 
 	run_expect_failure "$KUJO_BIN" run "$REPO_ROOT/scripts/docgen_ssg_bridge.kujo" -- \
 		--ssg-root "$temp_dir" \

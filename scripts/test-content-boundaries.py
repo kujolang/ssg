@@ -233,7 +233,7 @@ class Bridge(unittest.TestCase):
                     self.assertEqual(sentinel.read_text(), "outside sentinel")
                     target.unlink()
             (self.generated / "linked").symlink_to(self.root, target_is_directory=True)
-            (self.generated / "stale.md").write_text("stale sentinel")
+            (self.generated / "stale.md").write_text("---\ndocgen_generated: true\n---\nstale sentinel")
             manifest = self.generated / ".docgen-ssg-manifest.json"
             manifest.write_text(
                 json.dumps(
@@ -245,11 +245,20 @@ class Bridge(unittest.TestCase):
             )
             result = self.invoke("--skip-build")
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("symbolic link", result.stdout + result.stderr)
             self.assertEqual(sentinel.read_text(), "outside sentinel")
             self.assertTrue((self.generated / "stale.md").exists())
             manifest.unlink()
             (self.generated / "linked").unlink()
             (self.generated / "stale.md").unlink()
+
+    def test_git_metadata_is_not_a_bridge_destination(self):
+        for option in ("--content-out", "--docgen-out", "--cache-dir"):
+            with self.subTest(option=option):
+                result = self.invoke("--skip-build", option, ".git/bridge")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{option} must stay outside Git metadata", result.stdout)
+                self.assertFalse((self.root / ".git").exists())
 
     def test_dry_run_requires_existing_payload_before_docgen(self):
         result = run(

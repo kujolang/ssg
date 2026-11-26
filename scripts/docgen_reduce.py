@@ -196,7 +196,7 @@ def count_table(summary: dict) -> str:
 
 
 def generated_path(content_root: Path, entry: str) -> Path:
-    if not isinstance(entry, str) or not entry or "\\" in entry or ":" in entry or any(part in ("", ".", "..") for part in entry.split("/")):
+    if not isinstance(entry, str) or not entry or "\\" in entry or ":" in entry or any(part.lower() in ("", ".", "..", ".git") for part in entry.split("/")):
         raise SystemExit(f"manifest entry escapes generated root: {entry}")
     target = content_root
     for part in entry.split("/"):
@@ -205,6 +205,22 @@ def generated_path(content_root: Path, entry: str) -> Path:
             raise SystemExit(f"generated path must not be a symbolic link: {entry}")
     if not target.resolve().is_relative_to(content_root.resolve()):
         raise SystemExit(f"manifest entry escapes generated root: {entry}")
+    return target
+
+
+def generated_markdown_path(content_root: Path, entry: str) -> Path:
+    if not isinstance(entry, str) or not entry.endswith(".md"):
+        raise SystemExit("invalid DocGen SSG manifest entry: expected a Markdown path")
+    target = generated_path(content_root, entry)
+    if not target.exists():
+        return target
+    if not target.is_file():
+        raise SystemExit(f"DocGen Markdown target must be a regular file: {entry}")
+    with target.open(encoding="utf-8", newline="\n") as handle:
+        content = handle.read().replace("\r\n", "\n")
+    frontmatter_text, separator, _ = content.partition("\n---\n")
+    if not content.startswith("---\n") or not separator or "docgen_generated: true" not in frontmatter_text.split("\n"):
+        raise SystemExit(f"refusing to modify Markdown without DocGen ownership: {entry}")
     return target
 
 
@@ -221,12 +237,14 @@ def remove_stale(content_root: Path, manifest_name: str, new_files: list[str], d
     manifest_path = generated_path(content_root, manifest_name)
     if not manifest_path.exists():
         return
+    if not manifest_path.is_file():
+        raise SystemExit(f"DocGen SSG manifest must be a regular file: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema_version") != "docgen-ssg-manifest/v1" or not isinstance(manifest.get("files", []), list):
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != "docgen-ssg-manifest/v1" or not isinstance(manifest.get("files", []), list):
         raise SystemExit("invalid DocGen SSG manifest")
     # Validate the whole previous manifest before deleting any file.
-    targets = [(entry, generated_path(content_root, entry)) for entry in manifest.get("files", [])]
-    for entry, target in targets:
+    targets = {entry: generated_markdown_path(content_root, entry) for entry in manifest.get("files", [])}
+    for entry, target in sorted(targets.items()):
         if entry not in new_files and target.exists() and not dry_run:
             target.unlink()
 
@@ -348,7 +366,7 @@ def render_bridge(argv: list[str]) -> int:
 
     files = sorted(pages)
     manifest_path = generated_path(content_root, manifest_name)
-    targets = {filename: generated_path(content_root, filename) for filename in files}
+    targets = {filename: generated_markdown_path(content_root, filename) for filename in files}
     remove_stale(content_root, manifest_name, files, dry_run)
     for filename in files:
         write_markdown(targets[filename], pages[filename], dry_run)

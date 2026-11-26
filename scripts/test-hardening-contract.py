@@ -193,7 +193,7 @@ class Boundaries(unittest.TestCase):
     def test_stale_manifest_is_validated_before_any_deletion(self):
         content = self.root / "content"
         content.mkdir()
-        (content / "stale.md").write_text("keep until validated")
+        (content / "stale.md").write_text("---\ndocgen_generated: true\n---\nkeep until validated")
         (self.output / "victim.md").write_text("outside sentinel")
         (content / "linked").symlink_to(self.output, target_is_directory=True)
         (content / ".docgen-ssg-manifest.json").write_text(
@@ -204,7 +204,7 @@ class Boundaries(unittest.TestCase):
                 }
             )
         )
-        with self.assertRaises(SystemExit):
+        with self.assertRaisesRegex(SystemExit, "must not be a symbolic link"):
             reducer.remove_stale(content, ".docgen-ssg-manifest.json", [], False)
         self.assertEqual((self.output / "victim.md").read_text(), "outside sentinel")
         self.assertTrue((content / "stale.md").exists())

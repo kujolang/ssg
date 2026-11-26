@@ -148,6 +148,9 @@ func under_root(root, value, label) {
 	if candidate_abs != root_abs && starts_with(candidate_abs, prefix) == false {
 		fail(label + " must stay under SSG root: " + candidate_abs)
 	}
+	if string_in_list(split(to_lower(candidate_abs), "/"), ".git") {
+		fail(label + " must stay outside Git metadata: " + candidate_abs)
+	}
 	return candidate_abs
 }
 
@@ -469,7 +472,7 @@ func generated_path(content_root, entry) {
     }
     target := content_root
     for part in split(entry, "/") {
-        if part == "" || part == "." || part == ".." {
+        if part == "" || part == "." || part == ".." || to_lower(part) == ".git" {
             fail("manifest entry escapes generated root: " + entry)
         }
         target = path_join(target, part)
@@ -488,12 +491,25 @@ func generated_path(content_root, entry) {
     return target
 }
 
+func generated_markdown_path(content_root, entry) {
+	if !is_string(entry) || !ends_with(entry, ".md") {
+		fail("invalid DocGen SSG manifest entry: expected a Markdown path")
+	}
+	target := generated_path(content_root, entry)
+	if !path_exists(target) { return target }
+	if !path_is_file(target) { fail("DocGen Markdown target must be a regular file: " + entry) }
+	content := replace(read_file(target), "\r\n", "\n")
+	parts := split(content, "\n---\n")
+	if !starts_with(content, "---\n") || len(parts) < 2 || !string_in_list(split(parts[0], "\n"), "docgen_generated: true") {
+		fail("refusing to modify Markdown without DocGen ownership: " + entry)
+	}
+	return target
+}
+
 func old_manifest(content_root) {
 	path := generated_path(content_root, MANIFEST_NAME)
-	if path_exists(path) {
-	} else {
-		return {}
-	}
+	if !path_exists(path) { return {} }
+	if !path_is_file(path) { fail("DocGen SSG manifest must be a regular file: " + path) }
 	manifest := load_json(path, "DocGen SSG manifest")
 	if manifest["schema_version"] != MANIFEST_SCHEMA {
 		fail("manifest schema mismatch: " + path)
@@ -501,46 +517,21 @@ func old_manifest(content_root) {
 	return manifest
 }
 
-func remove_stale(content_root, manifest, new_files, dry_run) {
+func remove_stale(content_root, manifest, new_pages, dry_run) {
 	if has_key(manifest, "files") {
 	} else {
 		return null
 	}
 	manifest_entries := manifest["files"]
-    if !is_array(manifest_entries) { fail("invalid DocGen SSG manifest files") }
-    # Check all entries before the first deletion, including retained entries.
-    for entry in manifest_entries {
-        if !is_string(entry) { fail("invalid DocGen SSG manifest entry") }
-        generated_path(content_root, entry)
-    }
-	i := 0
-	loop {
-		if i >= len(manifest_entries) { break }
-		entry := to_string(manifest_entries[i])
-		i = i + 1
-		if index_of(entry, "..") >= 0 || starts_with(entry, "/") {
-			fail("manifest entry escapes generated root: " + entry)
-		}
-		still_generated := false
-		new_idx := 0
-		loop {
-			if new_idx >= len(new_files) { break }
-			if new_files[new_idx] == entry {
-				still_generated = true
-				break
-			}
-			new_idx = new_idx + 1
-		}
-		if still_generated == false {
-			target_path := generated_path(content_root, entry)
-			if path_exists(target_path) {
-				if dry_run {
-					skipped_delete := true
-				} else {
-					delete_file(target_path)
-				}
-			}
-		}
+	if !is_array(manifest_entries) { fail("invalid DocGen SSG manifest files") }
+	# Complete the preflight before the first deletion, including retained entries.
+	stale := {}
+	for entry in manifest_entries {
+		target := generated_markdown_path(content_root, entry)
+		if has_key(new_pages, entry) == 0 && path_exists(target) { stale[target] = true }
+	}
+	if !dry_run {
+		for target in sort(keys(stale)) { delete_file(target) }
 	}
 }
 
@@ -841,9 +832,9 @@ func generate_content(payload, project, gaps, content_root, source_link_template
 	pages[gaps_file] = gap_body
 	files = push(files, gaps_file)
 
-	for file in files { generated_path(content_root, file) }
+	for file in files { generated_markdown_path(content_root, file) }
 	generated_path(content_root, MANIFEST_NAME)
-	remove_stale(content_root, old_manifest(content_root), files, dry_run)
+	remove_stale(content_root, old_manifest(content_root), pages, dry_run)
 	sorted_files := sort(files)
 	i = 0
 	loop {
