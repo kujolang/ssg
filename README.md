@@ -154,6 +154,10 @@ single-process build. (The per-page render cost is interpreter-bound, so the
 speedup is real but memory-bandwidth-limited — see
 [docs/performance-findings.md](docs/performance-findings.md).)
 
+If you run phases directly, restart with `--phase setup` when upgrading an
+interrupted build. Shard workers use an internal JSON manifest and check that
+each listed Markdown file belongs to the configured posts directory.
+
 Scaffold a starter config file when bootstrapping a new project:
 
 ```bash
@@ -376,10 +380,10 @@ That keeps file-based defaults in place while applying the CLI values for the cu
 
 ## CLI Flags
 
-- `--output <dir>`: output directory. Existing output is deleted before a full/setup build, so paths that overlap the working directory or source content/templates/assets are rejected.
-- `--content <dir>`: content directory
-- `--templates <dir>`: templates directory
-- `--assets <dir>`: assets directory
+- `--output <dir>`: dedicated generated-output directory. A full or setup build deletes existing output. The builder rejects output paths targeting Git metadata, the working directory or its ancestors, and paths overlapping content, templates, assets, or the active `static/` fallback.
+- `--content <dir>`: content directory. Use a real directory for the content root.
+- `--templates <dir>`: templates directory. Use a real directory for the template root. Linked template files are skipped in favor of the applicable fallback.
+- `--assets <dir>`: assets directory. Asset copying skips Git metadata and symbolic links, including links at the asset root and in the `static/` fallback.
 - `--posts-per-page <n>`: listing pagination size
 - `--sort-by <date|title|author|order>`: blog listing sort mode
 - `--fonts <comma,list>`: heading/body font families (first = headings, second = body). Bundled families (`Bree Serif`, `Inter`, `Quicksand`, `Open Sans`) render offline; any other family is downloaded from Google Fonts as `woff2` and cached under `.cache/fonts/`. See [Fonts](#fonts).

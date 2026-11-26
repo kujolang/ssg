@@ -365,6 +365,17 @@ func template_override_name(value, source_file) {
 	return candidate
 }
 
+func site_template_exists(path) {
+	if !path_exists(path) {
+		return false
+	}
+	if path_is_symlink(path) {
+		print("Warning: Skipped symlink while reading template: " + path)
+		return false
+	}
+	return path_is_file(path)
+}
+
 func markdown_files(directory) {
 	files := []
 	if path_exists(directory) && path_is_symlink(directory) {
@@ -807,6 +818,12 @@ func absolute_config_path(value) {
 		}
 	}
 	return resolved
+}
+
+func directory_entry_path(value) {
+	entry := regex_replace(value, "(?:/+\\.)*/*$", "")
+	if entry == "" { return "/" }
+	return entry
 }
 
 func route_to_path(route) {
@@ -2490,6 +2507,10 @@ func copy_tree(src, dst) {
 	if !path_exists(src) {
 		return null
 	}
+	if path_is_symlink(directory_entry_path(src)) {
+		print("Warning: Skipped symlink while copying assets: " + src)
+		return null
+	}
 	if path_is_file(src) {
 		ensure_dir(dirname(dst))
 		copy_file(src, dst)
@@ -2506,8 +2527,8 @@ func copy_tree(src, dst) {
 
 		entry := entries[entry_idx]
 		entry_idx := entry_idx + 1
-		# Never publish OS/editor junk into the generated site.
-		if entry == ".DS_Store" || entry == "Thumbs.db" {
+		# Keep repository metadata and OS/editor files out of generated assets.
+		if to_lower(entry) == ".git" || entry == ".DS_Store" || entry == "Thumbs.db" {
 			continue
 		}
 		src_path := path_join(src, entry)
@@ -3807,41 +3828,45 @@ func normalize_settings(settings) {
 	}
 
 	# The setup phase recursively deletes an existing output tree. Refuse every
-	# overlap with source trees, including the working directory and filesystem
-	# root, before any destructive build work begins.
+	# overlap with source trees, the working directory and its ancestors, and
+	# Git metadata before any destructive build work begins.
 	try {
-		output_abs := absolute_config_path(settings["output"])
+		output := settings["output"]
+		output_abs := absolute_config_path(output)
+		output_prefix := output_abs + "/"
 		cwd_abs := path_absolute(os_getcwd())
-		if path_exists(settings["output"]) && path_is_symlink(settings["output"]) {
-			result["errors"] = push(result["errors"], "Unsafe output directory: " + settings["output"] + " is a symbolic link")
+		output_entry := directory_entry_path(output)
+		if path_exists(output_entry) && path_is_symlink(output_entry) {
+			result["errors"] = push(result["errors"], "Unsafe output directory: " + output + " is a symbolic link")
 		}
 		if output_abs == cwd_abs || dirname(output_abs) == output_abs {
-				result["errors"] = push(result["errors"], "Unsafe output directory: " + settings["output"] + " (refusing to delete the working directory or filesystem root)")
-			}
+			result["errors"] = push(result["errors"], "Unsafe output directory: " + output + " (refusing to delete the working directory or filesystem root)")
+		} else if starts_with(cwd_abs, output_prefix) {
+			result["errors"] = push(result["errors"], "Unsafe output directory: " + output + " is an ancestor of the working directory")
+		}
+		if string_in_list(".git", split(to_lower(output_abs), "/")) {
+			result["errors"] = push(result["errors"], "Unsafe output directory: " + output + " overlaps Git metadata")
+		}
 
-			source_paths := [settings["content"], settings["templates"], settings["assets"]]
-			source_idx := 0
-			loop {
-				if source_idx >= len(source_paths) {
-					break
-				}
-				source_path := source_paths[source_idx]
-				source_idx := source_idx + 1
-				source_abs := absolute_config_path(source_path)
-				output_prefix := output_abs
-				if !ends_with(output_prefix, "/") {
-					output_prefix = output_prefix + "/"
-				}
-				source_prefix := source_abs
-				if !ends_with(source_prefix, "/") {
-					source_prefix = source_prefix + "/"
-				}
-				if output_abs == source_abs || starts_with(source_abs, output_prefix) || starts_with(output_abs, source_prefix) {
-					result["errors"] = push(result["errors"], "Unsafe output directory: " + settings["output"] + " overlaps source directory " + source_path)
-				}
+		for setting in ["content", "templates"] {
+			root := directory_entry_path(settings[setting])
+			if path_exists(root) && path_is_symlink(root) {
+				result["errors"] = push(result["errors"], "Unsafe " + setting + " directory: " + settings[setting] + " is a symbolic link")
 			}
+		}
+
+		source_paths := [settings["content"], settings["templates"], settings["assets"]]
+		if !path_is_dir(settings["assets"]) {
+			source_paths = push(source_paths, "static")
+		}
+		for source in source_paths {
+			source_abs := absolute_config_path(source)
+			if source_abs == output_abs || starts_with(source_abs, output_prefix) || starts_with(output_abs, source_abs + "/") || dirname(source_abs) == source_abs {
+				result["errors"] = push(result["errors"], "Unsafe output directory: " + output + " overlaps source directory " + source)
+			}
+		}
 	} except err {
-			result["errors"] = push(result["errors"], "Could not validate output directory " + settings["output"] + ": " + safe_error_text(err))
+		result["errors"] = push(result["errors"], "Could not validate output directory " + settings["output"] + ": " + safe_error_text(err))
 	}
 
 	result["settings"] = settings
@@ -3853,19 +3878,16 @@ func copy_assets(settings) {
 	ensure_dir(output_assets)
 
 	assets_dir := settings["assets"]
-	used_config_assets := false
-	if path_exists(assets_dir) && path_is_dir(assets_dir) {
+	if path_is_dir(assets_dir) {
 		copy_tree(assets_dir, output_assets)
-		used_config_assets := true
-	} else if path_exists("static") && path_is_dir("static") {
+	} else if path_is_dir("static") {
 		copy_tree("static", output_assets)
-	}
-
-	static_style := path_join("static", "style.css")
-	if !used_config_assets && path_exists(static_style) {
-		out_css_dir := path_join(output_assets, "css")
-		ensure_dir(out_css_dir)
-		copy_file(static_style, path_join(out_css_dir, "style.css"))
+		static_style := path_join("static", "style.css")
+		if !path_is_symlink("static") && path_is_file(static_style) && !path_is_symlink(static_style) {
+			out_css_dir := path_join(output_assets, "css")
+			ensure_dir(out_css_dir)
+			copy_file(static_style, path_join(out_css_dir, "style.css"))
+		}
 	}
 }
 
@@ -3923,7 +3945,7 @@ func build_site(settings) {
 		# same large directory concurrently.
 		if phase == "setup" {
 			setup_post_files := markdown_files(path_join(content_root, "posts"))
-			write_file(path_join(output_dir, ".kujo-post-manifest.txt"), join(setup_post_files, "\n") + "\n")
+			write_file(path_join(output_dir, ".kujo-post-manifest.json"), to_json(setup_post_files) + "\n")
 		}
 	}
 
@@ -3949,27 +3971,27 @@ func build_site(settings) {
 	page_path := path_join(templates_dir, "page.html")
 	not_found_path := path_join(templates_dir, "404.html")
 
-	if path_exists(layout_path) { layout_template = read_file(layout_path) }
-	if path_exists(post_path) { post_template = read_file(post_path) }
-	if path_exists(page_path) { page_template = read_file(page_path) }
-	if path_exists(not_found_path) { not_found_template = read_file(not_found_path) }
+	if site_template_exists(layout_path) { layout_template = read_file(layout_path) }
+	if site_template_exists(post_path) { post_template = read_file(post_path) }
+	if site_template_exists(page_path) { page_template = read_file(page_path) }
+	if site_template_exists(not_found_path) { not_found_template = read_file(not_found_path) }
 
 	home_listing_template := ""
 	home_listing_path := path_join(templates_dir, "page-home.html")
-	if path_exists(home_listing_path) {
+	if site_template_exists(home_listing_path) {
 		home_listing_template = read_file(home_listing_path)
 	}
 
 	blog_listing_template := ""
 	if len(settings["blog_slug"]) > 0 {
 		blog_slug_listing_path := path_join(templates_dir, "page-" + settings["blog_slug"] + ".html")
-		if path_exists(blog_slug_listing_path) {
+		if site_template_exists(blog_slug_listing_path) {
 			blog_listing_template = read_file(blog_slug_listing_path)
 		}
 	}
 	if len(blog_listing_template) == 0 {
 		blog_listing_path := path_join(templates_dir, "page-blog.html")
-		if path_exists(blog_listing_path) {
+		if site_template_exists(blog_listing_path) {
 			blog_listing_template = read_file(blog_listing_path)
 		}
 	}
@@ -4000,20 +4022,28 @@ func build_site(settings) {
 	}
 
 	page_files := markdown_files(path_join(content_root, "pages"))
-	# In sharded phases, read the manifest written by setup to avoid every worker
+	# Shard workers read the manifest written by setup to avoid each worker
 	# re-listing a huge posts directory at once (robustness + less redundant work).
+	posts_root := path_join(content_root, "posts")
 	post_files := []
+	uses_post_manifest := false
 	if phase == "full" {
-		post_files = markdown_files(path_join(content_root, "posts"))
-	} else {
-		post_manifest := path_join(output_dir, ".kujo-post-manifest.txt")
+		post_files = markdown_files(posts_root)
+	} else if phase == "posts" {
+		post_manifest := path_join(output_dir, ".kujo-post-manifest.json")
 		if path_exists(post_manifest) {
-			manifest_text := trim(read_file(post_manifest))
-			if len(manifest_text) > 0 {
-				post_files = split(manifest_text, "\n")
+			if path_is_symlink(post_manifest) || !path_is_file(post_manifest) {
+				print("Error: post manifest must be a regular file: " + post_manifest)
+				exit(1)
 			}
+			post_files = parse_json(read_file(post_manifest))
+			if type(post_files) != "array" {
+				print("Error: expected an array of post paths in " + post_manifest)
+				exit(1)
+			}
+			uses_post_manifest = true
 		} else {
-			post_files = markdown_files(path_join(content_root, "posts"))
+			post_files = markdown_files(posts_root)
 		}
 	}
 	custom_collections := []
@@ -4191,7 +4221,7 @@ func build_site(settings) {
 		custom_template_name := page_data["template"]
 		if len(custom_template_name) > 0 {
 			custom_page_template := path_join(templates_dir, "page-" + custom_template_name + ".html")
-			if path_exists(custom_page_template) {
+			if site_template_exists(custom_page_template) {
 				selected_page_template := read_file(custom_page_template)
 			}
 		}
@@ -4298,6 +4328,12 @@ func build_site(settings) {
 		if post_stripe != shard {
 			continue
 		}
+		if uses_post_manifest {
+			if type(post_file) != "string" || !ends_with(post_file, ".md") || !path_is_file(post_file) || path_is_symlink(post_file) || !path_is_within_root(post_file, posts_root) || path_is_symlink(posts_root) {
+				print("Error: post manifest contains an invalid or out-of-root Markdown path")
+				exit(1)
+			}
+		}
 		parsed := parse_frontmatter(read_file(post_file), post_file)
 		meta := parsed["meta"]
 		post_is_draft := parse_bool_value(meta["draft"], false)
@@ -4368,7 +4404,7 @@ func build_site(settings) {
 		custom_template_name := template_override_name(meta["template"], post_file)
 		if len(custom_template_name) > 0 {
 			custom_post_template := path_join(templates_dir, "post-" + custom_template_name + ".html")
-			if path_exists(custom_post_template) {
+			if site_template_exists(custom_post_template) {
 				selected_post_template := read_file(custom_post_template)
 			}
 			}
@@ -4549,7 +4585,7 @@ func build_site(settings) {
 
 		default_collection_item_template := post_template
 		collection_item_template_path := path_join(templates_dir, collection_slug + ".html")
-		if path_exists(collection_item_template_path) {
+		if site_template_exists(collection_item_template_path) {
 			default_collection_item_template := read_file(collection_item_template_path)
 		}
 
@@ -4626,7 +4662,7 @@ func build_site(settings) {
 			custom_template_name := template_override_name(meta["template"], item_file)
 			if len(custom_template_name) > 0 {
 				custom_collection_template := path_join(templates_dir, "post-" + custom_template_name + ".html")
-				if path_exists(custom_collection_template) {
+				if site_template_exists(custom_collection_template) {
 					selected_collection_template := read_file(custom_collection_template)
 				}
 				}
@@ -4774,7 +4810,7 @@ func build_site(settings) {
 		listing_route := collection_slug + "/"
 		listing_content := "<main class=\"container max-w-2xl m-auto py-10 px-4\" id=\"main-content\"><h1 class=\"text-6xl font-bold mb-8 pb-8 text-links font-heading-bold border-b border-primary page-title\">" + collection_title + "</h1><ul class=\"card-grid\">" + collection_cards + "</ul></main>"
 		listing_template_path := path_join(templates_dir, "page-" + collection_slug + ".html")
-		if path_exists(listing_template_path) {
+		if site_template_exists(listing_template_path) {
 			listing_template := read_file(listing_template_path)
 			listing_content = apply_template(listing_template, {
 				"title": collection_title,
@@ -5132,7 +5168,7 @@ func build_site(settings) {
 				delete_file(leftover_webmcp)
 			}
 		}
-		post_manifest_cleanup := path_join(output_dir, ".kujo-post-manifest.txt")
+		post_manifest_cleanup := path_join(output_dir, ".kujo-post-manifest.json")
 		if path_exists(post_manifest_cleanup) {
 			delete_file(post_manifest_cleanup)
 		}

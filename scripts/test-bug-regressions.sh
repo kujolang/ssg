@@ -141,13 +141,47 @@ EOF
 	assert_path_missing content/not-created-yet
 	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output .
 	assert_output_contains "refusing to delete the working directory or filesystem root"
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output .. --inspect-config
+	assert_output_contains "is an ancestor of the working directory"
+	mkdir -p .git/objects static
+	touch .git/objects/preserve-me static/preserve-me
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output .git/objects --inspect-config
+	assert_output_contains "overlaps Git metadata"
+	assert_path_exists .git/objects/preserve-me
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --assets missing-assets --output static --inspect-config
+	assert_output_contains "overlaps source directory static"
+	assert_path_exists static/preserve-me
 	mkdir -p "$temp_dir/outside-output"
 	touch "$temp_dir/outside-output/preserve-me"
 	ln -s "$temp_dir/outside-output" output
 	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output output
 	assert_output_contains "Unsafe output directory: output is a symbolic link"
 	assert_path_exists "$temp_dir/outside-output/preserve-me"
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output output/ --inspect-config
+	assert_output_contains "Unsafe output directory: output/ is a symbolic link"
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output output/. --inspect-config
+	assert_output_contains "Unsafe output directory: output/. is a symbolic link"
 	rm output
+
+	ln -s content linked-content
+	ln -s templates linked-templates
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --content linked-content --inspect-config
+	assert_output_contains "Unsafe content directory: linked-content is a symbolic link"
+	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --templates linked-templates/. --inspect-config
+	assert_output_contains "Unsafe templates directory: linked-templates/. is a symbolic link"
+
+	ln -s "$temp_dir/outside-output" linked-assets
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --assets linked-assets/ --output linked-assets-output
+	assert_output_contains "Warning: Skipped symlink while copying assets: linked-assets/"
+	assert_path_missing linked-assets-output/assets/preserve-me
+	ln -s "$temp_dir/outside-output/preserve-me" static/style.css
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --assets missing-assets --output fallback-output
+	assert_path_exists fallback-output/assets/preserve-me
+	assert_path_missing fallback-output/assets/css/style.css
+	rm static/style.css
+	printf '%s\n' 'body { color: black; }' > static/style.css
+	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --assets missing-assets --output fallback-output
+	assert_file_contains fallback-output/assets/css/style.css 'body { color: black; }'
 
 	# 2: out-of-range shard indexes must not silently render an empty stripe.
 	run_expect_failure "$KUJO_BIN" run "$BUILD_SCRIPT" -- --phase posts --shard 2 --shards 2
@@ -158,13 +192,20 @@ EOF
 	mkdir -p output
 	ln -s "$temp_dir/outside-output" output/outside-link
 	ln -s "$temp_dir/outside-output/preserve-me" assets/css/outside-link.css
+	mkdir -p assets/vendor/.git
+	touch assets/vendor/.git/preserve-me
+	mv templates/post.html templates/safe-post.html
+	ln -s "$temp_dir/site/outside.html" templates/post.html
 	run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT"
+	mv templates/safe-post.html templates/post.html
 	assert_output_contains "Build complete"
 	assert_output_contains "Warning: Skipped symlink while copying assets: assets/css/outside-link.css"
 	assert_output_contains "Warning: Skipped symlink while scanning content: content/pages/outside-content.md"
+	assert_output_contains "Warning: Skipped symlink while reading template: templates/post.html"
 	assert_output_contains "Warning: Ignored unsafe template override in content/pages/unsafe-template.md: x/../../outside"
 	assert_path_exists "$temp_dir/outside-output/preserve-me"
 	assert_path_missing output/assets/css/outside-link.css
+	assert_path_missing output/assets/vendor/.git
 
 	# 3: output cleanup and asset copying never follow symlinks outside their roots.
 	assert_path_missing output/outside-link
@@ -174,6 +215,7 @@ EOF
 
 	# 4: empty blog_slug keeps posts at root instead of creating /untitled/.
 	assert_path_exists output/control-record/index.html
+	assert_file_not_contains output/control-record/index.html 'OUTSIDE-TEMPLATE-MARKER'
 	assert_path_missing output/untitled
 
 	# 5: repeated trailing site-url slashes are normalized across all outputs.

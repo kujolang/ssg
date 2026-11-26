@@ -2,23 +2,46 @@
 set -euo pipefail
 
 OUT_DIR="${1:-output}"
+while [[ "$OUT_DIR" != / ]]; do
+	case "$OUT_DIR" in
+		*/) OUT_DIR="${OUT_DIR%/}" ;;
+		*/.) OUT_DIR="${OUT_DIR%/.}"; OUT_DIR="${OUT_DIR:-/}" ;;
+		*) break ;;
+	esac
+done
+if [[ "$OUT_DIR" != /* ]]; then
+	OUT_DIR="./$OUT_DIR"
+fi
 
 if [[ ! -d "$OUT_DIR" ]]; then
 	echo "ERROR: output directory not found: $OUT_DIR"
 	exit 1
 fi
+if [[ -L "$OUT_DIR" ]]; then
+	echo "ERROR: output directory must not be a symbolic link: $OUT_DIR"
+	exit 1
+fi
+linked_entry="$(find "$OUT_DIR" -type l -print -quit)"
+if [[ -n "$linked_entry" ]]; then
+	echo "ERROR: generated output must not contain symbolic links: $OUT_DIR"
+	exit 1
+fi
 
 failures=0
 html_count=0
+has_webmcp_marker=false
 
 record_failure() {
 	echo "$1"
 	failures=$((failures + 1))
 }
 
-while IFS= read -r html_file; do
+while IFS= read -r -d '' html_file; do
 	html_count=$((html_count + 1))
 
+	if grep -Fq 'data-kujo-webmcp' "$html_file"; then
+		has_webmcp_marker=true
+	fi
 	if ! grep -Eqi '^<!doctype html>' "$html_file"; then
 		record_failure "FAIL doctype: $html_file"
 	fi
@@ -47,7 +70,7 @@ while IFS= read -r html_file; do
 		fi
 	fi
 
-done < <(find "$OUT_DIR" -name '*.html' -type f | sort)
+done < <(find "$OUT_DIR" -name '*.html' -type f -print0 | sort -z)
 
 if [[ "$html_count" -eq 0 ]]; then
 	record_failure "FAIL no-html: no HTML files found in $OUT_DIR"
@@ -70,8 +93,7 @@ if [[ -f "$OUT_DIR/feed/index.xml" ]]; then
 fi
 
 webmcp_index="$OUT_DIR/.well-known/kujo-site-index.json"
-webmcp_marker_count="$( { grep -RIl --include='*.html' 'data-kujo-webmcp' "$OUT_DIR" 2>/dev/null || true; } | wc -l | tr -d ' ')"
-if [[ "$webmcp_marker_count" -gt 0 || -f "$webmcp_index" ]]; then
+if [[ "$has_webmcp_marker" == true || -f "$webmcp_index" ]]; then
 	if [[ ! -f "$webmcp_index" ]]; then
 		record_failure "FAIL webmcp-index-missing: $webmcp_index"
 	elif ! python3 - "$OUT_DIR" <<'PY'
@@ -106,7 +128,9 @@ for item in items:
     if not path.startswith(base_path):
         raise SystemExit(f'FAIL webmcp-base-path: {url}')
     route = path[len(base_path):].strip('/')
-    target = out / route / 'index.html'
+    target = (out / route / 'index.html').resolve()
+    if not target.is_relative_to(out):
+        raise SystemExit(f'FAIL webmcp-route-escape: {url}')
     if not target.is_file():
         raise SystemExit(f'FAIL webmcp-route: {url} -> {target}')
 
@@ -121,6 +145,8 @@ class Scripts(HTMLParser):
 
 marked = 0
 for html in out.rglob('*.html'):
+    if not html.is_file():
+        continue
     parser = Scripts()
     parser.feed(html.read_text(encoding='utf-8'))
     for source, index_ref in parser.refs:

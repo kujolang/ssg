@@ -106,6 +106,34 @@ drive_path_result := execute_ssg_ability(registry, drive_path_invocation, servic
 assert(drive_path_result["ok"] == false, "drive-qualified output paths must be rejected")
 assert(drive_path_result["receipt"]["error"]["code"] == "invalid_output_path", "drive-qualified path rejection must survive in the canonical receipt")
 
+unsafe_outputs := [".git/objects"]
+for fixture in ["SSG_ABILITY_LINKED_OUTPUT", "SSG_ABILITY_DANGLING_OUTPUT"] {
+	linked_output := env(fixture)
+	if type(linked_output) == "string" && linked_output != "" {
+		unsafe_outputs = push(unsafe_outputs, linked_output + "/nested")
+	}
+}
+for output in unsafe_outputs {
+	invalid_validate := make_ssg_ability_invocation(validate_definition, {"output": output}, "validate-unsafe-" + output, "")
+	invalid_validate_result := execute_ssg_ability(registry, invalid_validate, services())
+	assert(invalid_validate_result["receipt"]["error"]["code"] == "invalid_output_path", "unsafe validation roots must be rejected before the validator runs")
+	for definition in [build_definition, shard_definition] {
+		input := {"site_url": "https://example.test", "output": output}
+		if definition["id"] == shard_definition["id"] {
+			input["shards"] = 1
+			input["concurrency"] = 1
+		}
+		key := "build-unsafe-" + definition["id"] + "-" + output
+		invocation := make_ssg_ability_invocation(definition, input, key, key)
+		invocation["definition_digest"] := ability_definition_digest(definition)["digest"]
+		path_approval := approval
+		path_approval["binding_digest"] := approval_binding_digest(invocation)
+		invocation["approval"] := path_approval
+		result := execute_ssg_ability(registry, invocation, approved_services)
+		assert(result["receipt"]["error"]["code"] == "invalid_output_path", "approved builds must still reject unsafe output paths")
+	}
+}
+
 if env("SSG_ABILITY_REAL_BUILD") == "1" {
 	real_registry_result := create_ssg_ability_registry(".", env("KUJO_BIN"))
 	assert(real_registry_result["ok"], "real SSG Ability registry must initialize")

@@ -26,7 +26,12 @@ rm -rf -- "$output_dir"
 mkdir -p "$repo_root/tmp"
 helper_tmp="$(mktemp -d "$repo_root/tmp/ability-helper-test.XXXXXX")"
 cd "$repo_root"
-SSG_ABILITY_REAL_BUILD=1 "$KUJO_BIN" run tests/ability_pack_tests.kujo --interpreter
+mkdir "$helper_tmp/real-output"
+ln -s real-output "$helper_tmp/linked-output"
+ln -s missing "$helper_tmp/dangling-output"
+SSG_ABILITY_LINKED_OUTPUT="${helper_tmp#$repo_root/}/linked-output" \
+	SSG_ABILITY_DANGLING_OUTPUT="${helper_tmp#$repo_root/}/dangling-output" \
+	SSG_ABILITY_REAL_BUILD=1 "$KUJO_BIN" run tests/ability_pack_tests.kujo --interpreter
 bash scripts/validate-generated-output.sh output-ability-conformance
 artifact_path="${helper_tmp#$repo_root/}/site-1.tar"
 second_artifact_path="${helper_tmp#$repo_root/}/site-2.tar"

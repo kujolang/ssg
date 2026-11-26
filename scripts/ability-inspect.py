@@ -32,6 +32,8 @@ def safe_path(root: Path, raw: str, *, invalid_code: str = "invalid_relative_pat
         fail(invalid_code, "Path must be a contained relative path")
     candidate = root
     for part in raw.split("/"):
+        if part.lower() == ".git":
+            fail(invalid_code, "SSG Ability paths must remain outside Git metadata")
         candidate = candidate / part
         if candidate.is_symlink():
             fail(symlink_code, "SSG Ability paths must not be symbolic links")
@@ -61,6 +63,8 @@ def files_under(directory: Path, suffixes: tuple[str, ...] | None = None) -> lis
                 if entries_seen > MAX_ENTRIES:
                     fail("entry_limit_exceeded", "SSG Ability scan exceeded its directory-entry limit")
                 path = Path(entry.path)
+                if entry.name.lower() == ".git":
+                    fail("git_metadata_not_allowed", "SSG Ability inputs must not contain Git metadata", [str(path.relative_to(directory))])
                 if entry.is_symlink():
                     fail("symlink_not_allowed", "SSG Ability inputs must not contain symbolic links", [str(path.relative_to(directory))])
                 if entry.is_dir(follow_symlinks=False):

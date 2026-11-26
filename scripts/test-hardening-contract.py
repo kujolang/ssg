@@ -42,6 +42,35 @@ class Boundaries(unittest.TestCase):
             function(*args)
         self.assertEqual(json.loads(receipt.getvalue())["code"], code)
 
+    def test_html_validator_keeps_relative_paths_literal_and_rejects_links(self):
+        output = self.root / "-output"
+        output.mkdir()
+        (output / "page\nname.html").write_text(
+            '<!doctype html><html lang="en"><main>Page</main></html>'
+        )
+        command = ["bash", str(REPO / "scripts/validate-generated-output.sh")]
+
+        def validate(path):
+            return subprocess.run(
+                [*command, path], cwd=self.root, capture_output=True, text=True, timeout=20
+            )
+
+        valid = validate("-output")
+        self.assertEqual(valid.returncode, 0, valid.stdout + valid.stderr)
+        self.assertIn("Checked HTML files: 1", valid.stdout)
+
+        linked_output = self.root / "linked-output"
+        linked_output.symlink_to(output, target_is_directory=True)
+        for path in ("linked-output/", "linked-output/./"):
+            result = validate(path)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("output directory must not be a symbolic link", result.stdout)
+
+        (output / "linked-page.html").symlink_to(self.root / "missing.html")
+        result = validate("-output")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("generated output must not contain symbolic links", result.stdout)
+
     def test_inspection_counts_all_links_and_keeps_actionable_details(self):
         for i in range(205):
             page = self.output / f"p{i}"
@@ -114,6 +143,16 @@ class Boundaries(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
             helper.export_artifact(project, "output", "linked/new/site.tar")
         self.assertFalse((outside / "new").exists())
+
+    def test_helpers_keep_git_metadata_out_of_inspection_and_export(self):
+        git_dir = self.root / ".git"
+        git_dir.mkdir()
+        self.rejected("invalid_relative_path", helper.output_inspect, self.root, ".git")
+        self.rejected("invalid_artifact_path", helper.export_artifact, self.root, "output", ".git/site.tar")
+        self.assertFalse((git_dir / "site.tar").exists())
+        (self.output / ".git").mkdir()
+        self.rejected("git_metadata_not_allowed", helper.export_artifact, self.root, "output", "site.tar")
+        self.assertFalse((self.root / "site.tar").exists())
 
     def test_failed_export_removes_only_its_partial_archive(self):
         (self.output / "index.html").write_text("<title>Home</title>")

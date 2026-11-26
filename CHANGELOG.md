@@ -4,6 +4,8 @@
 
 - Keep the shared WebMCP index fetch available to concurrent tool calls when one caller cancels. Restore tool registration when returning from the browser's back/forward cache.
 - Reap parallel build workers on early exit and report failed shards without writing temporary status files.
+- Protect Git metadata and source directories during output cleanup. Reject linked content and template roots, skip linked templates and assets, and reject symbolic links in Ability output paths and generated-output validation.
+- Preserve Markdown filenames in sharded builds and verify that manifest entries stay under the posts directory.
 
 ## 1.2.1 — 2026-10-21
 

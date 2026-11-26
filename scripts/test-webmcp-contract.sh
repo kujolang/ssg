@@ -111,6 +111,8 @@ run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output disabled-cli --co
 diff -ru disabled-false disabled-cli
 
 # YAML false overridden by CLI; all interaction flags remain independent.
+newline_post=$'content/posts/newline\nname.md'
+printf '%s\n' '---' 'title: Newline Name' 'custom_url: newline-name' '---' 'Markdown with a newline in its filename.' >"$newline_post"
 cat > kujo-ssg.yml <<'EOF'
 webmcp: false
 EOF
@@ -183,9 +185,11 @@ assert_output_contains 'Validation passed'
 
 # Finalize is the sole public-index owner; shard order cannot change bytes.
 KUJO_BIN="$KUJO_BIN" bash "$REPO_ROOT/scripts/build-parallel.sh" 2 2 --output parallel --content content --templates templates --assets assets --site-url https://example.test/docs --webmcp --drafts --minify --no-aux --no-index --no-aliases >/dev/null
+cmp enabled/blog/newline-name/index.html parallel/blog/newline-name/index.html
 cmp enabled/.well-known/kujo-site-index.json parallel/.well-known/kujo-site-index.json
 cmp enabled/assets/js/kujo-webmcp.js parallel/assets/js/kujo-webmcp.js
 find parallel -name '.kujo*' -print -quit | grep -q . && { echo 'FAIL parallel temp artifact leaked'; exit 1; }
+rm "$newline_post"
 run_expect_success "$KUJO_BIN" run "$BUILD_SCRIPT" -- --output root-posts --content content --templates templates --assets assets --site-url https://example.test/docs --webmcp --posts-at-root --no-aux --no-aliases
 python3 - <<'PY'
 import json
